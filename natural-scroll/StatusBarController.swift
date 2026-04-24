@@ -18,7 +18,7 @@ final class StatusBarController {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Выход", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         menu.items.first?.target = self
         statusItem.menu = menu
 

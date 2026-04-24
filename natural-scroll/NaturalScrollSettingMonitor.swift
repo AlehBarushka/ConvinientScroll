@@ -45,7 +45,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         let sandboxed = (sandboxId != nil)
         if sandboxed {
             canWriteSystemPreference = false
-            writeBlockedReason = "Нужно отключить App Sandbox, чтобы менять системную настройку."
+            writeBlockedReason = "Disable App Sandbox to change the system setting."
         } else {
             canWriteSystemPreference = true
             writeBlockedReason = nil

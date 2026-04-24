@@ -48,13 +48,13 @@ struct ContentView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     StatusRow(
-                        title: "Мышь",
-                        value: devicePresence.hasMouse ? "подключена" : "не найдена",
+                        title: "Mouse",
+                        value: devicePresence.hasMouse ? "connected" : "not found",
                         isConnected: devicePresence.hasMouse
                     )
                     StatusRow(
-                        title: "Трекпад",
-                        value: devicePresence.hasTrackpad ? "подключён" : "не найден",
+                        title: "Trackpad",
+                        value: devicePresence.hasTrackpad ? "connected" : "not found",
                         isConnected: devicePresence.hasTrackpad
                     )
                 }
