@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  natural-scroll
+//  ConvinientScroll
 //
 //  Created by aleh on 23.04.2026.
 //

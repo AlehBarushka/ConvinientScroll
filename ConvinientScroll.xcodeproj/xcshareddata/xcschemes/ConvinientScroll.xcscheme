@@ -17,8 +17,8 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
                BuildableName = "ConvinientScroll.app"
-               BlueprintName = "natural-scroll"
-               ReferencedContainer = "container:natural-scroll.xcodeproj">
+               BlueprintName = "ConvinientScroll"
+               ReferencedContainer = "container:ConvinientScroll.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -47,8 +47,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
             BuildableName = "ConvinientScroll.app"
-            BlueprintName = "natural-scroll"
-            ReferencedContainer = "container:natural-scroll.xcodeproj">
+            BlueprintName = "ConvinientScroll"
+            ReferencedContainer = "container:ConvinientScroll.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -64,8 +64,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
             BuildableName = "ConvinientScroll.app"
-            BlueprintName = "natural-scroll"
-            ReferencedContainer = "container:natural-scroll.xcodeproj">
+            BlueprintName = "ConvinientScroll"
+            ReferencedContainer = "container:ConvinientScroll.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
