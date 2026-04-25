@@ -13,6 +13,7 @@ struct ConvinientScrollApp: App {
     @StateObject private var devicePresence = DevicePresenceMonitor()
     @StateObject private var naturalScroll = NaturalScrollSettingMonitor()
     @State private var statusBar: StatusBarController?
+    @State private var autoNaturalScroll: AutoNaturalScrollController?
 
     var body: some Scene {
         WindowGroup {
@@ -25,6 +26,11 @@ struct ConvinientScrollApp: App {
                     naturalScroll.start()
                     if statusBar == nil {
                         statusBar = StatusBarController(devicePresence: devicePresence)
+                    }
+                    if autoNaturalScroll == nil {
+                        let controller = AutoNaturalScrollController()
+                        controller.start(devicePresence: devicePresence, naturalScroll: naturalScroll)
+                        autoNaturalScroll = controller
                     }
                 }
         }
