@@ -5,6 +5,11 @@ import Security
 
 @MainActor
 final class NaturalScrollSettingMonitor: ObservableObject {
+    enum ChangeSource {
+        case user
+        case auto
+    }
+
     @Published private(set) var isNaturalScrollEnabled: Bool = false
     @Published private(set) var canWriteSystemPreference: Bool = true
     @Published private(set) var writeBlockedReason: String?
@@ -37,10 +42,16 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         }
     }
 
-    func setEnabled(_ enabled: Bool) {
+    func setEnabled(_ enabled: Bool, source: ChangeSource = .user) {
         updateWriteCapability()
         guard canWriteSystemPreference else { return }
         let sandboxed = isSandboxed()
+
+        // Avoid unnecessary writes (helps prevent oscillation with the auto controller).
+        if readEffectiveValue() == enabled {
+            refresh()
+            return
+        }
 
         // Match System Settings: write only to the global domain (-g).
         writeGlobalPreference(enabled)

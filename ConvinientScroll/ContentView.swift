@@ -31,7 +31,7 @@ struct ContentView: View {
 
                     Toggle("", isOn: Binding(
                         get: { naturalScroll.isNaturalScrollEnabled },
-                        set: { naturalScroll.setEnabled($0) }
+                        set: { naturalScroll.setEnabled($0, source: .user) }
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
