@@ -1,6 +1,6 @@
 //
-//  natural_scrollApp.swift
-//  natural-scroll
+//  ConvinientScrollApp.swift
+//  ConvinientScroll
 //
 //  Created by aleh on 23.04.2026.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct natural_scrollApp: App {
+struct ConvinientScrollApp: App {
     @StateObject private var devicePresence = DevicePresenceMonitor()
     @StateObject private var naturalScroll = NaturalScrollSettingMonitor()
     @State private var statusBar: StatusBarController?
@@ -57,7 +57,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.body = applied ? state : "\(state) (not applied)"
 
         let request = UNNotificationRequest(
-            identifier: "natural-scroll-changed-\(UUID().uuidString)",
+            identifier: "convinientscroll-changed-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
