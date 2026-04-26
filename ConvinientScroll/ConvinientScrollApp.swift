@@ -12,6 +12,7 @@ import UserNotifications
 struct ConvinientScrollApp: App {
     @StateObject private var devicePresence = DevicePresenceMonitor()
     @StateObject private var naturalScroll = NaturalScrollSettingMonitor()
+    @StateObject private var launchAtLogin = LaunchAtLoginManager()
     @State private var statusBar: StatusBarController?
     @State private var autoNaturalScroll: AutoNaturalScrollController?
 
@@ -20,12 +21,13 @@ struct ConvinientScrollApp: App {
             ContentView()
                 .environmentObject(devicePresence)
                 .environmentObject(naturalScroll)
+                .environmentObject(launchAtLogin)
                 .onAppear {
                     NotificationService.shared.requestAuthorizationIfNeeded()
                     devicePresence.start()
                     naturalScroll.start()
                     if statusBar == nil {
-                        statusBar = StatusBarController(devicePresence: devicePresence)
+                        statusBar = StatusBarController(devicePresence: devicePresence, launchAtLogin: launchAtLogin)
                     }
                     if autoNaturalScroll == nil {
                         let controller = AutoNaturalScrollController()
