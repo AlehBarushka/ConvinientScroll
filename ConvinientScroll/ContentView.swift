@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var devicePresence: DevicePresenceMonitor
     @EnvironmentObject private var naturalScroll: NaturalScrollSettingMonitor
+    @EnvironmentObject private var launchAtLogin: LaunchAtLoginManager
     @State private var isHovering = false
 
     var body: some View {
@@ -46,6 +47,26 @@ struct ContentView: View {
 
                 Divider().opacity(0.35)
 
+                HStack {
+                    Text("Launch at Login")
+                        .font(.headline)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.setEnabled($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+
+                if let err = launchAtLogin.lastError {
+                    Text(err)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider().opacity(0.35)
+
                 VStack(alignment: .leading, spacing: 10) {
                     StatusRow(
                         title: "Mouse",
@@ -61,7 +82,7 @@ struct ContentView: View {
             }
             .padding(16)
         }
-        .frame(width: 320, height: 170)
+        .frame(width: 320, height: 220)
         .onHover { isHovering = $0 }
     }
 }
@@ -96,4 +117,5 @@ private struct StatusRow: View {
     ContentView()
         .environmentObject(DevicePresenceMonitor())
         .environmentObject(NaturalScrollSettingMonitor())
+        .environmentObject(LaunchAtLoginManager())
 }

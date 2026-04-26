@@ -8,8 +8,11 @@ final class StatusBarController {
     private var pendingState: (hasMouse: Bool, hasTrackpad: Bool)?
     private var updateScheduled = false
     private let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+    private weak var launchAtLogin: LaunchAtLoginManager?
+    private var launchAtLoginMenuItem: NSMenuItem?
 
-    init(devicePresence: DevicePresenceMonitor) {
+    init(devicePresence: DevicePresenceMonitor, launchAtLogin: LaunchAtLoginManager) {
+        self.launchAtLogin = launchAtLogin
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
@@ -18,9 +21,23 @@ final class StatusBarController {
         }
 
         let menu = NSMenu()
+        let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        launchItem.target = self
+        menu.addItem(launchItem)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
-        menu.items.first?.target = self
+        menu.items.last?.target = self
         statusItem.menu = menu
+
+        launchAtLoginMenuItem = launchItem
+        syncLaunchAtLoginMenuItem()
+
+        launchAtLogin.$isEnabled
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.syncLaunchAtLoginMenuItem()
+            }
+            .store(in: &cancellables)
 
         devicePresence.$hasMouse
             .combineLatest(devicePresence.$hasTrackpad)
@@ -31,6 +48,16 @@ final class StatusBarController {
             .store(in: &cancellables)
 
         scheduleIconUpdate(hasMouse: devicePresence.hasMouse, hasTrackpad: devicePresence.hasTrackpad)
+    }
+
+    private func syncLaunchAtLoginMenuItem() {
+        launchAtLoginMenuItem?.state = (launchAtLogin?.isEnabled == true) ? .on : .off
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        guard let manager = launchAtLogin else { return }
+        manager.setEnabled(!manager.isEnabled)
+        syncLaunchAtLoginMenuItem()
     }
 
     private func scheduleIconUpdate(hasMouse: Bool, hasTrackpad: Bool) {
