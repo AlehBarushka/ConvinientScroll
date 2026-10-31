@@ -8,11 +8,19 @@ final class NaturalScrollSettingMonitor: ObservableObject {
     enum ChangeSource {
         case user
         case auto
+        /// Repeat of a failed `.auto` write; its failure is not announced again.
+        case autoRetry
     }
 
     @Published private(set) var isNaturalScrollEnabled: Bool = false
+    /// False only when writing is impossible (App Sandbox). A failed write does not
+    /// clear it, so the user and the auto controller can try again.
     @Published private(set) var canWriteSystemPreference: Bool = true
     @Published private(set) var writeBlockedReason: String?
+
+    /// Last failed write; kept until a write succeeds so the periodic
+    /// `updateWriteCapability()` does not wipe the message.
+    private var writeFailureReason: String?
 
     private var timer: Timer?
     private static let preferenceKey = "com.apple.swipescrolldirection" as CFString
@@ -42,15 +50,19 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         }
     }
 
-    func setEnabled(_ enabled: Bool, source: ChangeSource = .user) {
+    /// Returns whether the system value equals `enabled` after the call.
+    @discardableResult
+    func setEnabled(_ enabled: Bool, source: ChangeSource = .user) -> Bool {
         updateWriteCapability()
-        guard canWriteSystemPreference else { return }
+        guard canWriteSystemPreference else { return false }
         let sandboxed = isSandboxed()
 
         // Avoid unnecessary writes (helps prevent oscillation with the auto controller).
         if readEffectiveValue() == enabled {
+            writeFailureReason = nil
+            updateWriteCapability()
             refresh()
-            return
+            return true
         }
 
         // Match System Settings: write only to the global domain (-g).
@@ -68,6 +80,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         }
 
         if didStick {
+            writeFailureReason = nil
             writeBlockedReason = nil
             // Notify other processes/UI that the setting changed.
             // Use the distributed notification so System Settings (and other observers)
@@ -86,16 +99,22 @@ final class NaturalScrollSettingMonitor: ObservableObject {
 
             refresh()
             NotificationService.shared.showNaturalScrollChanged(enabled: enabled, applied: true)
+            return true
         } else {
             // Force UI back to actual system state and show a helpful message.
             refresh()
-            canWriteSystemPreference = false
+            let reason: String
             if sandboxed {
-                writeBlockedReason = "macOS blocked changing this system setting because the app is running in App Sandbox. Build/distribute a non-sandboxed version."
+                reason = "macOS blocked changing this system setting because the app is running in App Sandbox. Build/distribute a non-sandboxed version."
             } else {
-                writeBlockedReason = "Couldn’t change the system Natural Scroll setting. The write did not persist (CFPreferences/defaults). Try restarting the app or logging out/in."
+                reason = "Couldn’t change the system Natural Scroll setting. The write did not persist (CFPreferences/defaults). Try restarting the app or logging out/in."
             }
-            NotificationService.shared.showNaturalScrollChanged(enabled: enabled, applied: false)
+            writeFailureReason = reason
+            writeBlockedReason = reason
+            if source != .autoRetry {
+                NotificationService.shared.showNaturalScrollChanged(enabled: enabled, applied: false)
+            }
+            return false
         }
     }
 
@@ -106,7 +125,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
             writeBlockedReason = "The app is running in App Sandbox, so it cannot change the system Natural Scroll setting."
         } else {
             canWriteSystemPreference = true
-            writeBlockedReason = nil
+            writeBlockedReason = writeFailureReason
         }
     }
 
