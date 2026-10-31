@@ -10,33 +10,51 @@ import UserNotifications
 
 @main
 struct ConvinientScrollApp: App {
-    @StateObject private var devicePresence = DevicePresenceMonitor()
-    @StateObject private var naturalScroll = NaturalScrollSettingMonitor()
-    @StateObject private var launchAtLogin = LaunchAtLoginManager()
-    @State private var statusBar: StatusBarController?
-    @State private var autoNaturalScroll: AutoNaturalScrollController?
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private let services = AppServices.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(devicePresence)
-                .environmentObject(naturalScroll)
-                .environmentObject(launchAtLogin)
-                .onAppear {
-                    NotificationService.shared.requestAuthorizationIfNeeded()
-                    devicePresence.start()
-                    naturalScroll.start()
-                    if statusBar == nil {
-                        statusBar = StatusBarController(devicePresence: devicePresence, launchAtLogin: launchAtLogin)
-                    }
-                    if autoNaturalScroll == nil {
-                        let controller = AutoNaturalScrollController()
-                        controller.start(devicePresence: devicePresence, naturalScroll: naturalScroll)
-                        autoNaturalScroll = controller
-                    }
-                }
+                .environmentObject(services.devicePresence)
+                .environmentObject(services.naturalScroll)
+                .environmentObject(services.launchAtLogin)
         }
         .windowResizability(.contentSize)
+    }
+}
+
+/// Owns the long-lived services. They must start at launch, not when the window
+/// appears: a Login Item launch creates no window, so `onAppear` never fires.
+@MainActor
+final class AppServices {
+    static let shared = AppServices()
+
+    let devicePresence = DevicePresenceMonitor()
+    let naturalScroll = NaturalScrollSettingMonitor()
+    let launchAtLogin = LaunchAtLoginManager()
+    private var statusBar: StatusBarController?
+    private var autoNaturalScroll: AutoNaturalScrollController?
+
+    func start() {
+        NotificationService.shared.requestAuthorizationIfNeeded()
+        devicePresence.start()
+        naturalScroll.start()
+        if statusBar == nil {
+            statusBar = StatusBarController(devicePresence: devicePresence, launchAtLogin: launchAtLogin)
+        }
+        if autoNaturalScroll == nil {
+            let controller = AutoNaturalScrollController()
+            controller.start(devicePresence: devicePresence, naturalScroll: naturalScroll)
+            autoNaturalScroll = controller
+        }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        AppServices.shared.start()
     }
 }
 
