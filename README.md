@@ -38,13 +38,41 @@ In short:
 
 ## 🚀 Install / Run
 
-For now, the project is distributed as source.
+### From a disk image
+
+1. Download `ConvinientScroll-<version>.dmg` and open it
+2. If ConvinientScroll is already running, quit it from the menu bar first
+3. Drag **ConvinientScroll** onto **Applications**; if an older version is there, choose **Replace**
+4. Eject the disk image and open ConvinientScroll from **Applications**
+
+Don't run the app from the disk image or from the Downloads folder. macOS may run a quarantined app
+from a temporary copy that is removed later (for example after sleep), and the app then crashes.
+
+The app is signed with a development certificate and is not notarized, so macOS may refuse to open it
+the first time. Right-click the app and choose **Open**, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/ConvinientScroll.app
+```
+
+### From source
 
 1. Open `ConvinientScroll.xcodeproj` in Xcode
 2. Select the `ConvinientScroll` target
 3. Run (⌘R)
 
 After launch, the app shows up in the menu bar.
+
+### Building the disk image
+
+```sh
+brew install create-dmg
+./scripts/make-dmg.sh   # writes dist/ConvinientScroll-<version>.dmg
+```
+
+The script lays the window out through Finder, so run it from a desktop session and allow Finder
+control if macOS asks. The window background lives in `dmg/`; regenerate it with
+`swift scripts/render-dmg-background.swift`.
 
 ---
 
