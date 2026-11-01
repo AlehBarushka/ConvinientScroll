@@ -92,6 +92,8 @@ command -v create-dmg >/dev/null || fail "create-dmg not found. Install it with:
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# Without stripping, the executable carries the debug map with the absolute paths of the build
+# machine (/Users/<name>/...), which would end up in a public release.
 echo "==> Building Release"
 xcodebuild \
   -project "$ROOT/$NAME.xcodeproj" \
@@ -99,10 +101,19 @@ xcodebuild \
   -configuration Release \
   -derivedDataPath "$WORK/build" \
   -quiet \
+  DEPLOYMENT_POSTPROCESSING=YES \
+  STRIP_INSTALLED_PRODUCT=YES \
+  COPY_PHASE_STRIP=YES \
+  STRIP_STYLE=debugging \
   build
 
 APP="$WORK/build/Build/Products/Release/$NAME.app"
 [ -d "$APP" ] || fail "build did not produce $APP"
+
+# Refuse to publish an executable that still carries the local home directory.
+if LC_ALL=C grep -a -F -q "$HOME" "$APP/Contents/MacOS/$NAME"; then
+  fail "the built executable contains $HOME; debug information was not stripped"
+fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 [ -n "$VERSION" ] || fail "cannot read the app version from Info.plist"
