@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UserNotifications
+import OSLog
 
 @main
 struct ConvinientScrollApp: App {
@@ -37,6 +38,7 @@ final class AppServices {
     private var autoNaturalScroll: AutoNaturalScrollController?
 
     func start() {
+        AppLog.logLaunchEnvironment()
         NotificationService.shared.requestAuthorizationIfNeeded()
         devicePresence.start()
         naturalScroll.start()
@@ -71,8 +73,13 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     func requestAuthorizationIfNeeded() {
         guard !didRequest else { return }
         didRequest = true
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in
-            // Intentionally ignore result; app still works without notifications.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            // The app still works without notifications; only record why they may be missing.
+            if let error {
+                AppLog.ui.error("Notification authorization failed: \(error.localizedDescription, privacy: .public)")
+            } else if !granted {
+                AppLog.ui.info("Notification authorization was not granted")
+            }
         }
     }
 
@@ -88,7 +95,11 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             trigger: nil
         )
 
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                AppLog.ui.error("Cannot deliver notification: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     // Ensure banners show even while app is in foreground.

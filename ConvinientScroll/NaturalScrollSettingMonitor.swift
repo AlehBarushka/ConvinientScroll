@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Combine
 import Darwin
 import Security
@@ -74,6 +75,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         var didStick = (readEffectiveValue() == enabled)
         if !didStick, !sandboxed {
             // Fallback: explicitly call `defaults write -g ...`.
+            AppLog.preferences.notice("CFPreferences write did not stick (enabled=\(enabled)); falling back to `defaults write`")
             _ = writeUsingDefaultsCommand(enabled)
             clearCurrentHostOverrideBestEffort()
             didStick = (readEffectiveValue() == enabled)
@@ -111,6 +113,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
             }
             writeFailureReason = reason
             writeBlockedReason = reason
+            AppLog.preferences.error("Failed to set Natural Scroll to \(enabled) (source=\(String(describing: source)), sandboxed=\(sandboxed))")
             if source != .autoRetry {
                 NotificationService.shared.showNaturalScrollChanged(enabled: enabled, applied: false)
             }
@@ -157,7 +160,9 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         // Equivalent to: defaults write -g com.apple.swipescrolldirection -bool <true|false>
         // (NSGlobalDomain / kCFPreferencesAnyApplication)
         CFPreferencesSetValue(Self.preferenceKey, enabled as CFBoolean, kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
-        CFPreferencesSynchronize(kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        if !CFPreferencesSynchronize(kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesAnyHost) {
+            AppLog.preferences.error("CFPreferencesSynchronize returned false after writing the global preference")
+        }
     }
 
     private func writeUsingDefaultsCommand(_ enabled: Bool) -> Bool {
@@ -190,22 +195,33 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         )
     }
 
-    private func applySwipeScrollDirectionBestEffort(_ enabled: Bool) {
+    private typealias SwipeScrollDirectionFn = @convention(c) (Bool) -> Void
+
+    /// Resolved once on first use. The handle is kept open on purpose: the framework
+    /// lives in the dyld shared cache, so `dlclose` would unload nothing anyway.
+    private static let swipeScrollDirectionFunction: SwipeScrollDirectionFn? = {
         // PreferencePanesSupport.framework exports a function used by the
         // Mouse/Trackpad preference panes to apply this instantly.
         // We load it dynamically to avoid hard-linking private frameworks.
         let path = "/System/Library/PrivateFrameworks/PreferencePanesSupport.framework/PreferencePanesSupport"
-        guard let handle = dlopen(path, RTLD_LAZY) else { return }
-        defer { dlclose(handle) }
-
-        typealias Fn = @convention(c) (Bool) -> Void
+        guard let handle = dlopen(path, RTLD_LAZY) else {
+            let reason = dlerror().map { String(cString: $0) } ?? "unknown error"
+            AppLog.preferences.error("Cannot load PreferencePanesSupport: \(reason, privacy: .public)")
+            return nil
+        }
 
         for symbol in ["setSwipeScrollDirection", "_setSwipeScrollDirection"] {
             if let sym = dlsym(handle, symbol) {
-                unsafeBitCast(sym, to: Fn.self)(enabled)
-                return
+                AppLog.preferences.info("Resolved private symbol \(symbol, privacy: .public)")
+                return unsafeBitCast(sym, to: SwipeScrollDirectionFn.self)
             }
         }
+        AppLog.preferences.error("PreferencePanesSupport has no known swipe-scroll symbol; scroll direction will update only after re-login")
+        return nil
+    }()
+
+    private func applySwipeScrollDirectionBestEffort(_ enabled: Bool) {
+        Self.swipeScrollDirectionFunction?(enabled)
     }
 
 
@@ -221,16 +237,39 @@ final class NaturalScrollSettingMonitor: ObservableObject {
 
     @discardableResult
     private func run(_ path: String, _ args: [String]) -> Bool {
+        Self.runProcess(path, args)
+    }
+
+    /// Runs on the main thread, so a hung child (e.g. `defaults` waiting on a stuck
+    /// cfprefsd) must not be waited for forever.
+    private nonisolated static let processTimeout: TimeInterval = 5
+
+    private nonisolated static func runProcess(_ path: String, _ args: [String]) -> Bool {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
+
+        let finished = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in finished.signal() }
+
         do {
             try p.run()
-            p.waitUntilExit()
-            return p.terminationStatus == 0
         } catch {
+            AppLog.preferences.error("Cannot launch \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return false
         }
+
+        if finished.wait(timeout: .now() + processTimeout) == .timedOut {
+            p.terminate()
+            AppLog.preferences.error("\(path, privacy: .public) \(args.joined(separator: " "), privacy: .public) timed out after \(processTimeout, format: .fixed(precision: 0))s and was terminated")
+            return false
+        }
+
+        // `defaults delete` of a missing key exits non-zero in normal operation.
+        if p.terminationStatus != 0 {
+            AppLog.preferences.debug("\(path, privacy: .public) \(args.joined(separator: " "), privacy: .public) exited with status \(p.terminationStatus)")
+        }
+        return p.terminationStatus == 0
     }
 }
 

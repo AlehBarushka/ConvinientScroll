@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import Combine
 
 @MainActor
@@ -92,6 +93,16 @@ final class StatusBarController {
 
         img?.isTemplate = true
         statusItem.button?.image = img
+
+        // Without any image the item would be invisible and its menu (Quit) unreachable.
+        if img == nil {
+            AppLog.ui.error("No SF Symbol available for the menu bar icon; showing a text title instead")
+            statusItem.button?.imagePosition = .noImage
+            statusItem.button?.title = "CS"
+        } else {
+            statusItem.button?.imagePosition = .imageOnly
+            statusItem.button?.title = ""
+        }
     }
 
     private func makeFirstAvailableSymbol(_ names: [String]) -> NSImage? {
