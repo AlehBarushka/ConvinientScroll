@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Combine
 import IOKit.hid
 import IOKit
@@ -21,6 +22,8 @@ final class DevicePresenceMonitor: ObservableObject {
         }
     }
 
+    private static let maxScanAttempts = 3
+
     private func recomputePresence() {
         var mouse = false
         var trackpad = false
@@ -34,6 +37,29 @@ final class DevicePresenceMonitor: ObservableObject {
         }
 
         defer { IOObjectRelease(iterator) }
+
+        // A device that appears or disappears mid-walk invalidates the iterator and
+        // the walk ends early, so "not found" is only trustworthy for a valid one.
+        // A positive result for both kinds is final either way.
+        var attempt = 1
+        while true {
+            (mouse, trackpad) = scanDevices(iterator)
+            if (mouse && trackpad) || IOIteratorIsValid(iterator) != 0 { break }
+            guard attempt < Self.maxScanAttempts else {
+                AppLog.devices.error("HID registry kept changing during \(attempt) scans; keeping the previous device state")
+                return
+            }
+            attempt += 1
+            IOIteratorReset(iterator)
+        }
+
+        if hasMouse != mouse { hasMouse = mouse }
+        if hasTrackpad != trackpad { hasTrackpad = trackpad }
+    }
+
+    private func scanDevices(_ iterator: io_iterator_t) -> (mouse: Bool, trackpad: Bool) {
+        var mouse = false
+        var trackpad = false
 
         while case let service = IOIteratorNext(iterator), service != 0 {
             defer { IOObjectRelease(service) }
@@ -67,8 +93,7 @@ final class DevicePresenceMonitor: ObservableObject {
             if mouse, trackpad { break }
         }
 
-        if hasMouse != mouse { hasMouse = mouse }
-        if hasTrackpad != trackpad { hasTrackpad = trackpad }
+        return (mouse, trackpad)
     }
 }
 
