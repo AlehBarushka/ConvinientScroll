@@ -12,6 +12,10 @@ struct ShelfGeometry: Equatable {
         case peek(Double)
         /// The shelf with its cards.
         case expanded
+
+        /// An empty shelf is invisible, so it must not take clicks from the app below;
+        /// it becomes a drop target once a file drag starts and the mode changes to `peek`.
+        var passesClicksThrough: Bool { self == .hidden }
     }
 
     struct Shape: Equatable {

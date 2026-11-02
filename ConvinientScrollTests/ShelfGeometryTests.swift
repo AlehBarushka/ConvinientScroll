@@ -49,6 +49,13 @@ struct ShelfGeometryTests {
         #expect(frame.midX == notched.screenFrame.midX)
     }
 
+    @Test func onlyTheEmptyShelfPassesClicksThrough() {
+        #expect(ShelfGeometry.Mode.hidden.passesClicksThrough)
+        #expect(!ShelfGeometry.Mode.indicator.passesClicksThrough)
+        #expect(!ShelfGeometry.Mode.peek(0).passesClicksThrough)
+        #expect(!ShelfGeometry.Mode.expanded.passesClicksThrough)
+    }
+
     @Test func closenessFallsOffWithDistance() {
         let zone = notched.attractionTarget
         #expect(notched.closeness(of: CGPoint(x: zone.midX, y: zone.minY)) == 1)
