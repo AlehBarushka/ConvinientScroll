@@ -134,6 +134,6 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
 
 Mac Toolkit is free for personal and other noncommercial use: you may use, copy and modify it and share your changes. Commercial use is not permitted.
 
-Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md).
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md) since version 2.0.0. Versions up to and including 1.1.3 were released under the MIT License, and those releases keep it.
 
 Required Notice: Copyright (c) 2026 Aleh Barushka
