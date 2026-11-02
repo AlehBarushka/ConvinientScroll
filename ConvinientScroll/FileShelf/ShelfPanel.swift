@@ -131,6 +131,7 @@ final class ShelfPanelController {
         hostingView = ShelfHostingView(rootView: ShelfRootView(model: model, store: store, actions: actions))
         hostingView.sizingOptions = []
         panel = ShelfPanel(frame: model.geometry.panelFrame(for: model.mode))
+        panel.ignoresMouseEvents = model.mode.passesClicksThrough
         panel.contentView = hostingView
         hostingView.controller = self
         panel.orderFrontRegardless()
@@ -235,6 +236,7 @@ final class ShelfPanelController {
             releaseWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.releaseDelay, execute: work)
         }
+        panel.ignoresMouseEvents = mode.passesClicksThrough
         model.mode = mode
     }
 
