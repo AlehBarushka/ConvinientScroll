@@ -1,34 +1,46 @@
-# ConvinientScroll
+# ConvinientScroll (Mac Toolkit)
 
 ## Для чего проект
 
-Утилита для macOS, которая сама переключает «Natural scrolling» в зависимости от того, что сейчас подключено: мышь или трекпад.
+Утилита для macOS в menu bar. С ноября 2026 продукт называется **Mac Toolkit** (`MacToolkit.app`); проект, таргет, схема, папки и bundle id `com.alehbarushka.convinientscroll` остались прежними. В ней два модуля, каждый выключается в настройках.
+
+**Автоскролл** сам переключает «Natural scrolling» в зависимости от того, что сейчас подключено: мышь или трекпад.
 
 - С мышью Natural Scroll выключен (классическое колесо: прокрутка вниз двигает содержимое вниз).
 - С трекпадом включён (как на телефоне).
 - Если ничего не найдено, настройка не трогается.
 
-Это избавляет от ручного переключения в System Settings при каждой смене устройства. Приложение живёт в menu bar, окно с ручным переключателем и статусом устройств есть, но не обязательно для работы. Требуется macOS 26.4 и новее.
+Это избавляет от ручного переключения в System Settings при каждой смене устройства.
+
+**Полка файлов**: файл перетаскивают к нотчу (или в верх-центр экрана без нотча), полка копирует его (APFS clone) и хранит заданное время; на другом Space наводят мышь на зону и вытаскивают файл в любое приложение. Файлы больше 1 ГБ с другого тома хранятся ссылкой (bookmark).
+
+Приложение фоновое (`LSUIElement`): иконки в Dock нет, окно настроек открывается из меню. Требуется macOS 26.4 и новее.
 
 ## Как это устроено
 
-- `DevicePresenceMonitor` раз в секунду опрашивает HID-устройства через `IOKit` и выставляет флаги `hasMouse` и `hasTrackpad`. Если реестр менялся во время обхода, обход повторяется.
-- `AutoNaturalScrollController` решает, что делать: трекпад и нет мыши — включить, есть мышь — выключить, ничего не найдено — не трогать. Есть debounce 200 мс и до трёх повторов записи через 5 с.
+- В простое ничего не тикает: постоянных таймеров нет, всё по событиям системы. Не добавляй опрос по таймеру.
+- `DevicePresenceMonitor` подписан на уведомления `IOKit` о появлении и исчезновении HID-устройств (плюс пересчёт после сна) и по ним обходит реестр, выставляя флаги `hasMouse` и `hasTrackpad`. Если реестр менялся во время обхода, обход повторяется.
+- `AutoNaturalScrollController` решает, что делать: трекпад и нет мыши — включить, есть мышь — выключить, ничего не найдено или модуль выключен — не трогать. Есть debounce 200 мс и до трёх повторов записи через 5 с (разовый таймер только после неудачи).
 - `NaturalScrollSettingMonitor` пишет глобальную настройку `com.apple.swipescrolldirection` через `CFPreferences`, при неудаче через `defaults write`, и применяет её сразу приватной функцией из `PreferencePanesSupport`. Вызовы `defaults` ограничены по времени.
-- `StatusBarController` (иконка в menu bar), `LaunchAtLoginManager` (автозапуск через `SMAppService`), `ContentView` (окно), `AppLog` (журнал через `os.Logger`).
+  Значение перечитывается по distributed notification `SwipeScrollDirectionDidChangeNotification`, после сна и при открытии настроек.
+- `StatusBarController` (иконка и меню: Show Shelf, Settings…, Launch at Login), `LaunchAtLoginManager` (автозапуск через `SMAppService`), `AppSettings` (переключатели модулей и срок хранения в `UserDefaults`), `SettingsView` и `SettingsWindowController` (окно настроек; создаётся по запросу и освобождается при закрытии), `AppLog` (журнал через `os.Logger`).
+- `FileShelf/`: `ShelfStore` (файлы и `index.json` в `~/Library/Application Support/<bundle id>/Shelf`, I/O вне главного потока, очистка по сроку разовым таймером), `ShelfController` (панель на каждый экран, глобальный монитор мыши только для отслеживания перетаскивания), `ShelfPanel` (неактивирующая `NSPanel`, приём файлов, наведение, размеры окна по состоянию), `ShelfGeometry` (нотч и размеры формы), `ShelfView` (SwiftUI-форма и карточки), `ShelfDragSource` (вынос файлов через `NSDraggingSource`), `ThumbnailCache` (миниатюры только в памяти, чистятся после сворачивания).
 
 ## Структура репозитория
 
 ```
-ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты
+ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки
+ConvinientScrollTests/       unit-тесты (Swift Testing): хранилище и геометрия полки
 ConvinientScroll.xcodeproj/  проект Xcode, версия и подпись заданы здесь
-scripts/make-dmg.sh          сборка Release и упаковка в dist/ConvinientScroll-<версия>.dmg
+scripts/make-dmg.sh          сборка Release и упаковка в dist/MacToolkit-<версия>.dmg
 scripts/render-dmg-background.swift  рисует фон окна образа
+scripts/render-app-icon.swift  рисует иконку приложения во все размеры AppIcon.appiconset
+LICENSE.md                   PolyForm Noncommercial 1.0.0: личное и некоммерческое использование, без коммерческого
 dmg/                         готовый фон окна образа (1x и 2x), коммитится
 dist/                        результат сборки образа, в git не попадает
 ```
 
-Тестов нет.
+Тесты: `xcodebuild -project ConvinientScroll.xcodeproj -scheme ConvinientScroll test` (или ⌘U). Тесты запускаются внутри приложения, поэтому `AppServices.start()` при запуске под XCTest ничего не делает: тесты не трогают menu bar и системную настройку.
 
 ## Сборка и запуск
 
@@ -45,6 +57,9 @@ dist/                        результат сборки образа, в gi
 Сообщения коммитов в стиле `feat:`, `fix:`, `chore:`, `docs:`.
 
 ## Ограничения
+
+- Лицензия PolyForm Noncommercial 1.0.0 (`LICENSE.md`), правообладатель указан в строке `Required Notice` и в `NSHumanReadableCopyright`. Не меняй лицензию без просьбы владельца.
+- Иконку в menu bar задаёт `StatusBarController`: мышь или трекпад, только пока включён модуль автоскролла, иначе лоток полки.
 
 - **App Sandbox выключен** (`ENABLE_APP_SANDBOX = NO`): иначе macOS не даёт писать глобальную настройку. Не включай его и не готовь сборку для Mac App Store.
 - Мгновенное применение настройки зависит от приватной функции в `PreferencePanesSupport`. Она может исчезнуть или измениться в новой версии macOS; без неё настройка применяется после повторного входа в систему.
