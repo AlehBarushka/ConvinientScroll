@@ -10,6 +10,7 @@ nonisolated enum AppLog {
     static let preferences = Logger(subsystem: subsystem, category: "preferences")
     static let devices = Logger(subsystem: subsystem, category: "devices")
     static let ui = Logger(subsystem: subsystem, category: "ui")
+    static let shelf = Logger(subsystem: subsystem, category: "shelf")
 
     /// A quarantined app launched from outside /Applications runs from a temporary
     /// read-only copy; if macOS unmounts it the process dies with SIGBUS.

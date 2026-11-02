@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
-               BuildableName = "ConvinientScroll.app"
+               BuildableName = "MacToolkit.app"
                BlueprintName = "ConvinientScroll"
                ReferencedContainer = "container:ConvinientScroll.xcodeproj">
             </BuildableReference>
@@ -29,6 +29,19 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E5A1C0DE2FA0000100D84F06"
+               BuildableName = "ConvinientScrollTests.xctest"
+               BlueprintName = "ConvinientScrollTests"
+               ReferencedContainer = "container:ConvinientScroll.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -46,7 +59,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
-            BuildableName = "ConvinientScroll.app"
+            BuildableName = "MacToolkit.app"
             BlueprintName = "ConvinientScroll"
             ReferencedContainer = "container:ConvinientScroll.xcodeproj">
          </BuildableReference>
@@ -63,7 +76,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F274DCE02F99FF9000D84F06"
-            BuildableName = "ConvinientScroll.app"
+            BuildableName = "MacToolkit.app"
             BlueprintName = "ConvinientScroll"
             ReferencedContainer = "container:ConvinientScroll.xcodeproj">
          </BuildableReference>
@@ -74,7 +87,7 @@
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
-      customArchiveName = "ConvinientScroll"
+      customArchiveName = "MacToolkit"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>
