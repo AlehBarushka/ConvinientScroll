@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds a Release ConvinientScroll.app and packs it into dist/ConvinientScroll-<version>.dmg,
+# Builds a Release MacToolkit.app and packs it into dist/MacToolkit-<version>.dmg,
 # a disk image whose window shows the app next to an Applications link to drag it onto.
 #
 # Needs create-dmg (brew install create-dmg). create-dmg lays the window out through Finder,
@@ -7,7 +7,10 @@
 # The background comes from dmg/ (see scripts/render-dmg-background.swift).
 set -euo pipefail
 
-NAME="ConvinientScroll"
+# The Xcode project and scheme keep the original name; the product was renamed to Mac Toolkit.
+PROJECT_NAME="ConvinientScroll"
+APP_NAME="MacToolkit"
+VOLUME_NAME="Mac Toolkit"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/dist"
 
@@ -32,7 +35,7 @@ fail() {
 # Prints "<width>, <height>" of the window size Finder stored in the mounted volume's .DS_Store
 # (a "{{x, y}, {width, height}}" string).
 stored_window_size() {
-  grep -a -o -E '\{\{[0-9]+, [0-9]+\}, \{[0-9]+, [0-9]+\}\}' "/Volumes/$NAME/.DS_Store" |
+  grep -a -o -E '\{\{[0-9]+, [0-9]+\}, \{[0-9]+, [0-9]+\}\}' "/Volumes/$VOLUME_NAME/.DS_Store" |
     head -n 1 |
     sed -E 's/.*\}, \{([0-9]+, [0-9]+)\}\}/\1/'
 }
@@ -47,7 +50,7 @@ fix_window_bounds() {
 
   for attempt in 1 2 3; do
     hdiutil attach "$writable" -noautoopen -quiet
-    osascript - "$NAME" 200 120 $((200 + WINDOW_WIDTH)) $((120 + WINDOW_HEIGHT)) <<'APPLESCRIPT'
+    osascript - "$VOLUME_NAME" 200 120 $((200 + WINDOW_WIDTH)) $((120 + WINDOW_HEIGHT)) <<'APPLESCRIPT'
 on run argv
   tell application "Finder"
     tell disk (item 1 of argv)
@@ -68,12 +71,12 @@ on run argv
 end run
 APPLESCRIPT
     sleep 3
-    rm -rf "/Volumes/$NAME/.fseventsd"
-    hdiutil detach "/Volumes/$NAME" -quiet || hdiutil detach "/Volumes/$NAME" -force -quiet
+    rm -rf "/Volumes/$VOLUME_NAME/.fseventsd"
+    hdiutil detach "/Volumes/$VOLUME_NAME" -quiet || hdiutil detach "/Volumes/$VOLUME_NAME" -force -quiet
 
     hdiutil attach "$writable" -readonly -nobrowse -noautoopen -quiet
     stored="$(stored_window_size || true)"
-    hdiutil detach "/Volumes/$NAME" -quiet || hdiutil detach "/Volumes/$NAME" -force -quiet
+    hdiutil detach "/Volumes/$VOLUME_NAME" -quiet || hdiutil detach "/Volumes/$VOLUME_NAME" -force -quiet
 
     if [ "$stored" = "$WINDOW_WIDTH, $WINDOW_HEIGHT" ]; then
       hdiutil convert "$writable" -format UDZO -imagekey zlib-level=9 -o "$image" -ov -quiet
@@ -86,8 +89,8 @@ APPLESCRIPT
 
 command -v create-dmg >/dev/null || fail "create-dmg not found. Install it with: brew install create-dmg"
 
-# A leftover mount makes create-dmg name the new volume "$NAME 1" and the layout goes wrong.
-[ ! -e "/Volumes/$NAME" ] || fail "/Volumes/$NAME is already mounted. Eject it and run again."
+# A leftover mount makes create-dmg name the new volume "$VOLUME_NAME 1" and the layout goes wrong.
+[ ! -e "/Volumes/$VOLUME_NAME" ] || fail "/Volumes/$VOLUME_NAME is already mounted. Eject it and run again."
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -96,8 +99,8 @@ trap 'rm -rf "$WORK"' EXIT
 # machine (/Users/<name>/...), which would end up in a public release.
 echo "==> Building Release"
 xcodebuild \
-  -project "$ROOT/$NAME.xcodeproj" \
-  -scheme "$NAME" \
+  -project "$ROOT/$PROJECT_NAME.xcodeproj" \
+  -scheme "$PROJECT_NAME" \
   -configuration Release \
   -derivedDataPath "$WORK/build" \
   -quiet \
@@ -107,11 +110,11 @@ xcodebuild \
   STRIP_STYLE=debugging \
   build
 
-APP="$WORK/build/Build/Products/Release/$NAME.app"
+APP="$WORK/build/Build/Products/Release/$APP_NAME.app"
 [ -d "$APP" ] || fail "build did not produce $APP"
 
 # Refuse to publish an executable that still carries the local home directory.
-if LC_ALL=C grep -a -F -q "$HOME" "$APP/Contents/MacOS/$NAME"; then
+if LC_ALL=C grep -a -F -q "$HOME" "$APP/Contents/MacOS/$APP_NAME"; then
   fail "the built executable contains $HOME; debug information was not stripped"
 fi
 
@@ -127,20 +130,20 @@ tiffutil -cathidpicheck "$ROOT/dmg/background.png" "$ROOT/dmg/background@2x.png"
 mkdir "$WORK/stage"
 cp -R "$APP" "$WORK/stage/"
 
-OUTPUT="$DIST/$NAME-$VERSION.dmg"
+OUTPUT="$DIST/$APP_NAME-$VERSION.dmg"
 mkdir -p "$DIST"
 rm -f "$OUTPUT"
 
 echo "==> Creating $OUTPUT"
 create-dmg \
-  --volname "$NAME" \
+  --volname "$VOLUME_NAME" \
   --volicon "$ICON" \
   --background "$WORK/background.tiff" \
   --window-pos 200 120 \
   --window-size "$WINDOW_WIDTH" "$WINDOW_HEIGHT" \
   --icon-size "$ICON_SIZE" \
-  --icon "$NAME.app" "$APP_X" "$ICON_Y" \
-  --hide-extension "$NAME.app" \
+  --icon "$APP_NAME.app" "$APP_X" "$ICON_Y" \
+  --hide-extension "$APP_NAME.app" \
   --app-drop-link "$DROP_X" "$ICON_Y" \
   "$OUTPUT" \
   "$WORK/stage"

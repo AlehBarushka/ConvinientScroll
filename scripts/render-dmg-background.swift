@@ -57,7 +57,7 @@ func render(scale: Int, to url: URL) throws {
     NSGradient(starting: groundTop, ending: groundBottom)?.draw(in: windowArea, angle: 90)
 
     drawCentered(
-        "Drag ConvinientScroll to Applications",
+        "Drag Mac Toolkit to Applications",
         y: 44,
         font: .systemFont(ofSize: 21, weight: .semibold),
         color: titleColor
