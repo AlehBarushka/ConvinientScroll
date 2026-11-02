@@ -96,7 +96,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # Without stripping, the executable carries the debug map with the absolute paths of the build
-# machine (/Users/<name>/...), which would end up in a public release.
+# machine (/Users/<name>/...), which would end up in a public release. The scheme's tests turn
+# code coverage on, and coverage instrumentation embeds source paths too, so it is turned off.
 echo "==> Building Release"
 xcodebuild \
   -project "$ROOT/$PROJECT_NAME.xcodeproj" \
@@ -108,6 +109,8 @@ xcodebuild \
   STRIP_INSTALLED_PRODUCT=YES \
   COPY_PHASE_STRIP=YES \
   STRIP_STYLE=debugging \
+  ENABLE_CODE_COVERAGE=NO \
+  CLANG_COVERAGE_MAPPING=NO \
   build
 
 APP="$WORK/build/Build/Products/Release/$APP_NAME.app"
