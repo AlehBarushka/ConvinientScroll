@@ -3,22 +3,64 @@ import OSLog
 import Combine
 import IOKit.hid
 import IOKit
+import AppKit
 
 @MainActor
 final class DevicePresenceMonitor: ObservableObject {
     @Published private(set) var hasMouse: Bool = false
     @Published private(set) var hasTrackpad: Bool = false
 
-    private var timer: Timer?
+    /// IOKit reports HID devices appearing and disappearing, so the registry is walked
+    /// only when something changed instead of on a timer.
+    private var notificationPort: IONotificationPortRef?
+    private var matchedIterator: io_iterator_t = 0
+    private var terminatedIterator: io_iterator_t = 0
+    private var recomputeScheduled = false
+    private var wakeObserver: NSObjectProtocol?
+
+    /// One device usually brings several HID interfaces; their events are coalesced.
+    private static let coalescingDelay: DispatchTimeInterval = .milliseconds(150)
 
     func start() {
-        guard timer == nil else { return }
+        guard notificationPort == nil else { return }
         recomputePresence()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.recomputePresence()
+
+        guard let port = IONotificationPortCreate(kIOMainPortDefault) else {
+            AppLog.devices.error("Cannot create an IOKit notification port; device changes will not be noticed")
+            return
+        }
+        notificationPort = port
+        CFRunLoopAddSource(CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port).takeUnretainedValue(), .commonModes)
+
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        for (type, iterator) in [(kIOFirstMatchNotification, \DevicePresenceMonitor.matchedIterator),
+                                 (kIOTerminatedNotification, \DevicePresenceMonitor.terminatedIterator)] {
+            var it: io_iterator_t = 0
+            let result = IOServiceAddMatchingNotification(port, type, IOServiceMatching(kIOHIDDeviceKey), hidDevicesChanged, context, &it)
+            if result == KERN_SUCCESS {
+                // The iterator must be drained to arm the notification.
+                drainIterator(it)
+                self[keyPath: iterator] = it
+            } else {
+                AppLog.devices.error("IOServiceAddMatchingNotification failed: \(result)")
             }
+        }
+
+        // Bluetooth devices may reconnect while the Mac sleeps.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.scheduleRecompute() }
+        }
+    }
+
+    fileprivate func scheduleRecompute() {
+        guard !recomputeScheduled else { return }
+        recomputeScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.coalescingDelay) { [weak self] in
+            guard let self else { return }
+            self.recomputeScheduled = false
+            self.recomputePresence()
         }
     }
 
@@ -97,3 +139,17 @@ final class DevicePresenceMonitor: ObservableObject {
     }
 }
 
+
+private nonisolated func drainIterator(_ iterator: io_iterator_t) {
+    while case let service = IOIteratorNext(iterator), service != 0 {
+        IOObjectRelease(service)
+    }
+}
+
+/// Called on the main run loop, where the notification port's source was added.
+private nonisolated let hidDevicesChanged: IOServiceMatchingCallback = { refcon, iterator in
+    drainIterator(iterator)
+    guard let refcon else { return }
+    let monitor = Unmanaged<DevicePresenceMonitor>.fromOpaque(refcon).takeUnretainedValue()
+    MainActor.assumeIsolated { monitor.scheduleRecompute() }
+}

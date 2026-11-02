@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import OSLog
 import Combine
 import Darwin
@@ -19,11 +20,12 @@ final class NaturalScrollSettingMonitor: ObservableObject {
     @Published private(set) var canWriteSystemPreference: Bool = true
     @Published private(set) var writeBlockedReason: String?
 
-    /// Last failed write; kept until a write succeeds so the periodic
+    /// Last failed write; kept until a write succeeds so a later
     /// `updateWriteCapability()` does not wipe the message.
     private var writeFailureReason: String?
 
-    private var timer: Timer?
+    /// The value is re-read on change notifications instead of being polled.
+    private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
     private static let preferenceKey = "com.apple.swipescrolldirection" as CFString
     private static let distributedNotificationName = Notification.Name("SwipeScrollDirectionDidChangeNotification")
     private static let legacyDeviceDomainsToClear: [String] = [
@@ -34,7 +36,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
     ]
 
     func start() {
-        guard timer == nil else { return }
+        guard observers.isEmpty else { return }
         updateWriteCapability()
         // If a previous version wrote per-device overrides, remove them so that
         // System Settings remains the source of truth.
@@ -42,13 +44,18 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         // Match System Settings behavior: keep only the global value.
         clearCurrentHostOverrideBestEffort()
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.updateWriteCapability()
-                self.refresh()
-            }
+
+        // System Settings posts this when the user flips the switch there; this app
+        // posts it after its own writes. Waking from sleep covers anything missed.
+        observe(DistributedNotificationCenter.default(), Self.distributedNotificationName)
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.didWakeNotification)
+    }
+
+    private func observe(_ center: NotificationCenter, _ name: Notification.Name) {
+        let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
         }
+        observers.append((center, token))
     }
 
     /// Returns whether the system value equals `enabled` after the call.
@@ -132,7 +139,7 @@ final class NaturalScrollSettingMonitor: ObservableObject {
         }
     }
 
-    private func refresh() {
+    func refresh() {
         let boolValue = readEffectiveValue()
         if isNaturalScrollEnabled != boolValue { isNaturalScrollEnabled = boolValue }
     }

@@ -7,8 +7,19 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		F274DCE12F99FF9000D84F06 /* ConvinientScroll.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ConvinientScroll.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F274DCE12F99FF9000D84F06 /* MacToolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacToolkit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5A1C0DE2FA0000200D84F06 /* ConvinientScrollTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConvinientScrollTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		E5A1C0DE2FA0000400D84F06 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F274DCD92F99FF9000D84F06 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F274DCE02F99FF9000D84F06;
+			remoteInfo = ConvinientScroll;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F274DCE32F99FF9000D84F06 /* ConvinientScroll */ = {
@@ -16,10 +27,22 @@
 			path = ConvinientScroll;
 			sourceTree = "<group>";
 		};
+		E5A1C0DE2FA0000300D84F06 /* ConvinientScrollTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ConvinientScrollTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F274DCDE2F99FF9000D84F06 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5A1C0DE2FA0000700D84F06 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				F274DCE32F99FF9000D84F06 /* ConvinientScroll */,
+				E5A1C0DE2FA0000300D84F06 /* ConvinientScrollTests */,
 				F274DCE22F99FF9000D84F06 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +64,8 @@
 		F274DCE22F99FF9000D84F06 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F274DCE12F99FF9000D84F06 /* ConvinientScroll.app */,
+				F274DCE12F99FF9000D84F06 /* MacToolkit.app */,
+				E5A1C0DE2FA0000200D84F06 /* ConvinientScrollTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -67,8 +92,31 @@
 			packageProductDependencies = (
 			);
 			productName = ConvinientScroll;
-			productReference = F274DCE12F99FF9000D84F06 /* ConvinientScroll.app */;
+			productReference = F274DCE12F99FF9000D84F06 /* MacToolkit.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E5A1C0DE2FA0000100D84F06 /* ConvinientScrollTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5A1C0DE2FA0000900D84F06 /* Build configuration list for PBXNativeTarget "ConvinientScrollTests" */;
+			buildPhases = (
+				E5A1C0DE2FA0000600D84F06 /* Sources */,
+				E5A1C0DE2FA0000700D84F06 /* Frameworks */,
+				E5A1C0DE2FA0000800D84F06 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E5A1C0DE2FA0000500D84F06 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E5A1C0DE2FA0000300D84F06 /* ConvinientScrollTests */,
+			);
+			name = ConvinientScrollTests;
+			packageProductDependencies = (
+			);
+			productName = ConvinientScrollTests;
+			productReference = E5A1C0DE2FA0000200D84F06 /* ConvinientScrollTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					F274DCE02F99FF9000D84F06 = {
 						CreatedOnToolsVersion = 26.4.1;
+					};
+					E5A1C0DE2FA0000100D84F06 = {
+						CreatedOnToolsVersion = 27.2;
+						TestTargetID = F274DCE02F99FF9000D84F06;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				F274DCE02F99FF9000D84F06 /* ConvinientScroll */,
+				E5A1C0DE2FA0000100D84F06 /* ConvinientScrollTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		F274DCDF2F99FF9000D84F06 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5A1C0DE2FA0000800D84F06 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5A1C0DE2FA0000600D84F06 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E5A1C0DE2FA0000500D84F06 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F274DCE02F99FF9000D84F06 /* ConvinientScroll */;
+			targetProxy = E5A1C0DE2FA0000400D84F06 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F274DCEA2F99FF9100D84F06 /* Debug */ = {
@@ -254,7 +329,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = ConvinientScroll;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mac Toolkit";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Aleh Barushka. PolyForm Noncommercial 1.0.0.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -272,8 +349,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alehbarushka.convinientscroll;
-				PRODUCT_NAME = ConvinientScroll;
-				REGISTER_APP_GROUPS = YES;
+				PRODUCT_NAME = MacToolkit;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = macosx;
@@ -300,7 +376,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = ConvinientScroll;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mac Toolkit";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2026 Aleh Barushka. PolyForm Noncommercial 1.0.0.";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -318,8 +396,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.alehbarushka.convinientscroll;
-				PRODUCT_NAME = ConvinientScroll;
-				REGISTER_APP_GROUPS = YES;
+				PRODUCT_NAME = MacToolkit;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = macosx;
@@ -330,6 +407,48 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		E5A1C0DE2FA0000A00D84F06 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 8YZ6M443H7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alehbarushka.convinientscroll.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacToolkit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MacToolkit";
+			};
+			name = Debug;
+		};
+		E5A1C0DE2FA0000B00D84F06 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 8YZ6M443H7;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.alehbarushka.convinientscroll.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MacToolkit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MacToolkit";
 			};
 			name = Release;
 		};
@@ -350,6 +469,15 @@
 			buildConfigurations = (
 				F274DCED2F99FF9100D84F06 /* Debug */,
 				F274DCEE2F99FF9100D84F06 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5A1C0DE2FA0000900D84F06 /* Build configuration list for PBXNativeTarget "ConvinientScrollTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5A1C0DE2FA0000A00D84F06 /* Debug */,
+				E5A1C0DE2FA0000B00D84F06 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

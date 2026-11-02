@@ -6,22 +6,21 @@
 //
 
 import SwiftUI
+import Combine
 import UserNotifications
 import OSLog
 
 @main
 struct ConvinientScrollApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let services = AppServices.shared
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(services.devicePresence)
-                .environmentObject(services.naturalScroll)
-                .environmentObject(services.launchAtLogin)
-        }
-        .windowResizability(.contentSize)
+        // The app lives in the menu bar (LSUIElement); its settings window is owned by
+        // `SettingsWindowController`, because `showSettingsWindow:` is unreliable from an
+        // NSMenu of an agent app. The empty scene only satisfies `App`, and removing its
+        // commands keeps ⌘, from opening a blank window.
+        Settings { EmptyView() }
+            .commandsRemoved()
     }
 }
 
@@ -31,25 +30,74 @@ struct ConvinientScrollApp: App {
 final class AppServices {
     static let shared = AppServices()
 
+    let settings = AppSettings()
     let devicePresence = DevicePresenceMonitor()
     let naturalScroll = NaturalScrollSettingMonitor()
     let launchAtLogin = LaunchAtLoginManager()
+    private(set) lazy var shelfStore = ShelfStore(
+        configuration: .init(rootURL: ShelfStore.defaultRootURL),
+        retention: settings.shelfRetention.interval
+    )
     private var statusBar: StatusBarController?
     private var autoNaturalScroll: AutoNaturalScrollController?
+    private var shelf: ShelfController?
+    private var settingsWindow: SettingsWindowController?
+    private var cancellables = Set<AnyCancellable>()
+
+    /// Unit tests run inside the app; they must not touch the menu bar or system settings.
+    static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
 
     func start() {
+        guard !Self.isRunningTests else { return }
         AppLog.logLaunchEnvironment()
         NotificationService.shared.requestAuthorizationIfNeeded()
         devicePresence.start()
         naturalScroll.start()
-        if statusBar == nil {
-            statusBar = StatusBarController(devicePresence: devicePresence, launchAtLogin: launchAtLogin)
-        }
         if autoNaturalScroll == nil {
             let controller = AutoNaturalScrollController()
-            controller.start(devicePresence: devicePresence, naturalScroll: naturalScroll)
+            controller.start(devicePresence: devicePresence, naturalScroll: naturalScroll, settings: settings)
             autoNaturalScroll = controller
         }
+
+        startShelf()
+
+        if statusBar == nil {
+            statusBar = StatusBarController(
+                devicePresence: devicePresence,
+                launchAtLogin: launchAtLogin,
+                settings: settings,
+                onShowShelf: { [weak self] in self?.shelf?.showShelf() },
+                onOpenSettings: { [weak self] in self?.openSettings() }
+            )
+        }
+    }
+
+    private func startShelf() {
+        guard shelf == nil else { return }
+        let store = shelfStore
+        Task { await store.load() }
+
+        let controller = ShelfController(store: store)
+        shelf = controller
+
+        settings.$shelfRetention
+            .removeDuplicates()
+            .sink { store.retention = $0.interval }
+            .store(in: &cancellables)
+
+        settings.$shelfEnabled
+            .removeDuplicates()
+            .sink { controller.setEnabled($0) }
+            .store(in: &cancellables)
+    }
+
+    func openSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(services: self)
+        }
+        settingsWindow?.show()
     }
 }
 
@@ -57,6 +105,13 @@ final class AppServices {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppServices.shared.start()
+    }
+
+    /// Opening the app again from Finder or Spotlight shows its settings, since there is
+    /// no Dock icon or window to bring forward otherwise.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { AppServices.shared.openSettings() }
+        return true
     }
 }
 
