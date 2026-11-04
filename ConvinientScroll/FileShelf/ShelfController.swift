@@ -94,9 +94,9 @@ final class ShelfController {
             remove: { store.remove($0) },
             clear: { store.removeAll() },
             dragOutBegan: { [weak self] in self?.isDraggingOut = true },
-            dragOutEnded: { [weak self] in
+            dragOutEnded: { [weak self] accepted in
                 self?.isDraggingOut = false
-                self?.panels.forEach { $0.interactionEnded() }
+                self?.panels.forEach { $0.interactionEnded(holdOpen: !accepted) }
             }
         )
     }
