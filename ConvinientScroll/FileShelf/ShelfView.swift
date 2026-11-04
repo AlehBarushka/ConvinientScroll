@@ -10,6 +10,7 @@ final class ShelfPanelModel: ObservableObject {
     /// The card row exists only while this is true; it is released a moment after
     /// the shelf collapses so a collapsed shelf holds no thumbnails or views.
     @Published var showsContent = false
+    @Published var selection = ShelfSelection()
     let geometry: ShelfGeometry
 
     init(geometry: ShelfGeometry) {
@@ -22,7 +23,7 @@ struct ShelfActions {
     var remove: (UUID) -> Void
     var clear: () -> Void
     var dragOutBegan: () -> Void
-    var dragOutEnded: () -> Void
+    var dragOutEnded: (_ accepted: Bool) -> Void
 }
 
 /// The black shape at the top of the screen and everything inside it.
@@ -52,7 +53,7 @@ struct ShelfRootView: View {
                     if model.showsContent {
                         ShelfContent(model: model, store: store, actions: actions)
                             .padding(.horizontal, shape.earRadius)
-                            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                            .transition(Self.contentTransition)
                     }
                 }
             }
@@ -68,6 +69,13 @@ struct ShelfRootView: View {
     private var animation: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.78)
     }
+
+    // The cards stand still while the shape shrinks, so on collapse they must be gone
+    // before it has moved far, or they read as lagging behind it.
+    private static let contentTransition: AnyTransition = {
+        let fadeAndScale = AnyTransition.opacity.combined(with: .scale(scale: 0.96, anchor: .top))
+        return .asymmetric(insertion: fadeAndScale, removal: fadeAndScale.animation(.easeOut(duration: 0.1)))
+    }()
 }
 
 /// A rectangle hanging from the top edge, with rounded bottom corners and concave
@@ -148,6 +156,7 @@ private struct ShelfContent: View {
     @ObservedObject var model: ShelfPanelModel
     @ObservedObject var store: ShelfStore
     let actions: ShelfActions
+    @State private var rowWidth: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -200,7 +209,7 @@ private struct ShelfContent: View {
             Spacer(minLength: (model.geometry.notch?.width ?? 0) + 16)
 
             if !store.items.isEmpty {
-                DragAllHandle(urls: availableURLs, actions: actions)
+                DragAllHandle(files: { allFiles }, onBegin: actions.dragOutBegan, onEnd: dragEnded)
                 Button("Clear", action: actions.clear)
                     .buttonStyle(.plain)
                     .foregroundStyle(.white.opacity(0.6))
@@ -221,21 +230,48 @@ private struct ShelfContent: View {
                         item: item,
                         url: actions.url(item),
                         isMissing: store.missingItemIDs.contains(item.id),
+                        isSelected: model.selection.ids.contains(item.id),
                         appearDelay: Double(min(index, 10)) * 0.025,
-                        actions: actions
+                        actions: actions,
+                        onClick: { flags in
+                            model.selection.click(item.id, modifier: .init(flags: flags), order: selectableIDs)
+                        },
+                        dragFiles: { filesForDrag(from: item.id) },
+                        onDragEnd: dragEnded
                     )
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 14)
+            .frame(minWidth: rowWidth, maxHeight: .infinity, alignment: .leading)
+            .background(ShelfEmptySpaceClick { model.selection.clear() })
             .animation(.spring(response: 0.38, dampingFraction: 0.75), value: store.items.map(\.id))
         }
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { rowWidth = $0 }
+        .onChange(of: selectableIDs) { _, ids in model.selection.retain(Set(ids)) }
     }
 
-    private var availableURLs: [URL] {
-        store.items
-            .filter { !store.missingItemIDs.contains($0.id) }
-            .compactMap(actions.url)
+    /// In the order the cards are shown.
+    private var selectableIDs: [UUID] {
+        store.items.reversed().map(\.id).filter { !store.missingItemIDs.contains($0) }
+    }
+
+    private var allFiles: [ShelfDragFile] {
+        store.items.filter { !store.missingItemIDs.contains($0.id) }.compactMap(dragFile)
+    }
+
+    private func filesForDrag(from id: UUID) -> [ShelfDragFile] {
+        let ids = model.selection.beginDrag(from: id, order: selectableIDs)
+        return ids.compactMap { id in store.items.first { $0.id == id } }.compactMap(dragFile)
+    }
+
+    private func dragFile(for item: ShelfItem) -> ShelfDragFile? {
+        actions.url(item).map { ShelfDragFile(url: $0, image: ThumbnailCache.shared.cached(item.id)) }
+    }
+
+    private func dragEnded(accepted: Bool) {
+        if accepted { model.selection.clear() }
+        actions.dragOutEnded(accepted)
     }
 }
 
@@ -258,8 +294,9 @@ private struct DropPrompt: View {
 }
 
 private struct DragAllHandle: View {
-    let urls: [URL]
-    let actions: ShelfActions
+    let files: () -> [ShelfDragFile]
+    let onBegin: () -> Void
+    let onEnd: (Bool) -> Void
     @State private var isHovering = false
 
     var body: some View {
@@ -268,7 +305,7 @@ private struct DragAllHandle: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(.white.opacity(isHovering ? 0.14 : 0.08), in: Capsule())
-            .overlay(ShelfDragSource(urls: urls, image: nil, onBegin: actions.dragOutBegan, onEnd: actions.dragOutEnded))
+            .overlay(ShelfDragSource(files: files, onBegin: onBegin, onEnd: onEnd))
             .onHover { isHovering = $0 }
             .help("Drag every file on the shelf at once")
     }
@@ -278,8 +315,12 @@ private struct ShelfCard: View {
     let item: ShelfItem
     let url: URL?
     let isMissing: Bool
+    let isSelected: Bool
     let appearDelay: Double
     let actions: ShelfActions
+    let onClick: (NSEvent.ModifierFlags) -> Void
+    let dragFiles: () -> [ShelfDragFile]
+    let onDragEnd: (Bool) -> Void
 
     @State private var isHovering = false
     @State private var thumbnail: NSImage?
@@ -314,16 +355,19 @@ private struct ShelfCard: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 3)
-        .background(.white.opacity(isHovering ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             if !isMissing, let url {
                 ShelfDragSource(
-                    urls: [url],
-                    image: thumbnail,
+                    files: dragFiles,
                     onBegin: actions.dragOutBegan,
-                    onEnd: actions.dragOutEnded,
+                    onEnd: onDragEnd,
+                    onClick: onClick,
                     onOpen: { NSWorkspace.shared.open(url) }
                 )
+            } else {
+                // Keeps a click on an unavailable card from reaching the empty-space catcher.
+                ShelfDragSource(files: { [] })
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -357,6 +401,10 @@ private struct ShelfCard: View {
             guard thumbnail == nil, !isMissing, let url else { return }
             thumbnail = await ThumbnailCache.shared.thumbnail(for: item.id, url: url, side: Self.side, scale: displayScale)
         }
+    }
+
+    private var cardBackground: Color {
+        isSelected ? Color(nsColor: .controlAccentColor).opacity(0.45) : .white.opacity(isHovering ? 0.1 : 0)
     }
 
     @ViewBuilder

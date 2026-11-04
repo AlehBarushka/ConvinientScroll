@@ -113,9 +113,11 @@ final class ShelfPanelController {
     private var collapseWork: DispatchWorkItem?
     private var shrinkWork: DispatchWorkItem?
     private var releaseWork: DispatchWorkItem?
+    private var holdOpenUntil = Date.distantPast
 
     private static let hoverDelay: TimeInterval = 0.3
     private static let collapseDelay: TimeInterval = 0.4
+    private static let cancelledDragHold: TimeInterval = 2
     private static let shrinkDelay: TimeInterval = 0.5
     private static let releaseDelay: TimeInterval = 2
 
@@ -179,7 +181,10 @@ final class ShelfPanelController {
         collapseWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.collapseIfIdle() }
         collapseWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.collapseDelay, execute: work)
+        // A pointer-exit event can arrive after the drag ends, so the hold is a deadline
+        // that every scheduling respects, not a longer delay for one call.
+        let delay = max(Self.collapseDelay, holdOpenUntil.timeIntervalSinceNow)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func collapseIfIdle() {
@@ -190,7 +195,8 @@ final class ShelfPanelController {
     }
 
     /// The pointer left after an interaction that did not track it (a drop, a drag out).
-    func interactionEnded() {
+    func interactionEnded(holdOpen: Bool = false) {
+        if holdOpen { holdOpenUntil = Date(timeIntervalSinceNow: Self.cancelledDragHold) }
         if !panel.frame.contains(NSEvent.mouseLocation) { scheduleCollapse() }
     }
 
@@ -228,6 +234,7 @@ final class ShelfPanelController {
             model.showsContent = true
             store.refreshAvailability()
         } else if model.mode == .expanded {
+            model.selection.clear()
             let work = DispatchWorkItem { [weak self] in
                 guard let self, !self.isExpanded else { return }
                 self.model.showsContent = false
