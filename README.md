@@ -84,7 +84,7 @@ Apart from the Memory module, the app runs no periodic timers when idle: everyth
 3. Drag **Mac Toolkit** onto **Applications**; if an older version is there, choose **Replace**
 4. Eject the disk image and open Mac Toolkit from **Applications**
 
-From this version on, updates install from the menu bar: choose **Check for Updates…**. The manual steps above are needed only for the first installation and for older versions.
+Versions that have **Check for Updates…** in the menu bar install updates themselves. The manual steps above are needed only for the first installation and for versions without that menu item.
 
 Updating from ConvinientScroll: delete `ConvinientScroll.app` from Applications and turn **Launch at Login** on again in Settings (the login item is tied to the app’s location). Other settings are kept.
 

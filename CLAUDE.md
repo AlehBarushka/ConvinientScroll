@@ -35,7 +35,7 @@
 
 ```
 ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки, Memory/ — модуль памяти, Updates/ — встроенное обновление
-ConvinientScrollTests/       unit-тесты (Swift Testing): полка и модуль памяти
+ConvinientScrollTests/       unit-тесты (Swift Testing): полка, модуль памяти и обновление
 ConvinientScroll.xcodeproj/  проект Xcode, версия и подпись заданы здесь
 scripts/make-dmg.sh          сборка Release и упаковка в dist/MacToolkit-<версия>.dmg
 scripts/render-dmg-background.swift  рисует фон окна образа
