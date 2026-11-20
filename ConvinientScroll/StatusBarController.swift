@@ -13,17 +13,20 @@ final class StatusBarController {
     private var launchAtLoginMenuItem: NSMenuItem?
     private let onShowShelf: () -> Void
     private let onOpenSettings: () -> Void
+    private let onCheckForUpdates: () -> Void
 
     init(
         devicePresence: DevicePresenceMonitor,
         launchAtLogin: LaunchAtLoginManager,
         settings: AppSettings,
         onShowShelf: @escaping () -> Void,
-        onOpenSettings: @escaping () -> Void
+        onOpenSettings: @escaping () -> Void,
+        onCheckForUpdates: @escaping () -> Void
     ) {
         self.launchAtLogin = launchAtLogin
         self.onShowShelf = onShowShelf
         self.onOpenSettings = onOpenSettings
+        self.onCheckForUpdates = onCheckForUpdates
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
@@ -39,6 +42,9 @@ final class StatusBarController {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updatesItem.target = self
+        menu.addItem(updatesItem)
         menu.addItem(.separator())
         let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         launchItem.target = self
@@ -92,6 +98,10 @@ final class StatusBarController {
 
     @objc private func openSettings() {
         onOpenSettings()
+    }
+
+    @objc private func checkForUpdates() {
+        onCheckForUpdates()
     }
 
     private func syncLaunchAtLoginMenuItem() {

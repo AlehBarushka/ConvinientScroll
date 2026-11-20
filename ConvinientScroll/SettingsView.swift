@@ -58,8 +58,20 @@ struct SettingsView: View {
     }
 }
 
+private struct CheckForUpdatesKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var checkForUpdates: () -> Void {
+        get { self[CheckForUpdatesKey.self] }
+        set { self[CheckForUpdatesKey.self] = newValue }
+    }
+}
+
 private struct GeneralSettings: View {
     @EnvironmentObject private var launchAtLogin: LaunchAtLoginManager
+    @Environment(\.checkForUpdates) private var checkForUpdates
 
     var body: some View {
         Form {
@@ -77,6 +89,7 @@ private struct GeneralSettings: View {
 
             Section {
                 LabeledContent("Version", value: Self.version)
+                Button("Check for Updates…", action: checkForUpdates)
                 LabeledContent("License") {
                     Link("PolyForm Noncommercial 1.0.0", destination: URL(string: "https://polyformproject.org/licenses/noncommercial/1.0.0")!)
                 }
@@ -234,6 +247,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 .environmentObject(services.naturalScroll)
                 .environmentObject(services.launchAtLogin)
                 .environmentObject(services.shelfStore)
+                .environment(\.checkForUpdates) { [services] in services.checkForUpdates() }
             let window = NSWindow(contentViewController: NSHostingController(rootView: root))
             window.title = "Mac Toolkit"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]

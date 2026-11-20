@@ -43,6 +43,7 @@ final class AppServices {
     private var shelf: ShelfController?
     private var memory: MemoryController?
     private var settingsWindow: SettingsWindowController?
+    private var updateWindow: UpdateWindowController?
     private var cancellables = Set<AnyCancellable>()
 
     /// Unit tests run inside the app; they must not touch the menu bar or system settings.
@@ -64,6 +65,7 @@ final class AppServices {
 
         startShelf()
         startMemory()
+        reportPreviousUpdate()
 
         if statusBar == nil {
             statusBar = StatusBarController(
@@ -71,7 +73,8 @@ final class AppServices {
                 launchAtLogin: launchAtLogin,
                 settings: settings,
                 onShowShelf: { [weak self] in self?.shelf?.showShelf() },
-                onOpenSettings: { [weak self] in self?.openSettings() }
+                onOpenSettings: { [weak self] in self?.openSettings() },
+                onCheckForUpdates: { [weak self] in self?.checkForUpdates() }
             )
         }
     }
@@ -103,6 +106,58 @@ final class AppServices {
             .removeDuplicates()
             .sink { controller.setEnabled($0) }
             .store(in: &cancellables)
+    }
+
+    private func reportPreviousUpdate() {
+        guard let current = AppVersion.current else {
+            AppLog.updates.error("Cannot read the app version; skipping the update report")
+            return
+        }
+        UpdateLaunchReport.run(
+            store: PendingUpdateStore(defaults: .standard),
+            failureFile: PendingUpdateStore.failureFileURL,
+            current: current,
+            isLoginItemEnabled: { [launchAtLogin] in launchAtLogin.isEnabled },
+            enableLoginItem: { [launchAtLogin] in launchAtLogin.setEnabled(true) },
+            showAlert: { title, text in
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = text
+                alert.addButton(withTitle: "OK")
+                NSApp.activate()
+                alert.runModal()
+            }
+        )
+    }
+
+    func checkForUpdates() {
+        if updateWindow == nil {
+            updateWindow = UpdateWindowController(model: makeUpdateModel())
+        }
+        updateWindow?.showAndCheck()
+    }
+
+    private func makeUpdateModel() -> UpdateModel {
+        guard let current = AppVersion.current else {
+            return UpdateModel(
+                current: AppVersion("0")!,
+                check: { () async throws(UpdateError) -> UpdateCheckResult in throw .unreadableVersion(tag: "?") },
+                install: { (_, _) async throws(UpdateError) in },
+                openURL: { _ in }
+            )
+        }
+        let launchAtLogin = launchAtLogin
+        return UpdateModel(
+            current: current,
+            check: { () async throws(UpdateError) -> UpdateCheckResult in
+                try await ReleaseFeed.live().check(current: current)
+            },
+            install: { (update, progress) async throws(UpdateError) in
+                try await UpdateInstaller(environment: .live(launchAtLogin: launchAtLogin))
+                    .install(update, progress: progress)
+            },
+            openURL: { NSWorkspace.shared.open($0) }
+        )
     }
 
     func openSettings() {
