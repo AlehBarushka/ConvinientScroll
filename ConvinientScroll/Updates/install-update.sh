@@ -32,7 +32,8 @@ while kill -0 "$pid" 2>/dev/null; do
     sleep 0.2
 done
 
-backup="$(dirname "$target")/.$(basename "$target").update-backup"
+name="$(basename "$target" .app)"
+backup="$(dirname "$target")/$name (previous version).app"
 rm -rf "$backup"
 
 had_backup=0

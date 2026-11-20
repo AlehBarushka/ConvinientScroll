@@ -10,7 +10,7 @@ import Testing
         var target: URL { applications.appendingPathComponent("Mac Toolkit.app") }
         var staged: URL { staging.appendingPathComponent("Mac Toolkit.app") }
         var fallback: URL { root.appendingPathComponent("Fallback/Mac Toolkit.app") }
-        var backup: URL { applications.appendingPathComponent(".Mac Toolkit.app.update-backup") }
+        var backup: URL { applications.appendingPathComponent("Mac Toolkit (previous version).app") }
         var failure: URL { root.appendingPathComponent("Support/Update/failure.txt") }
         var opened: URL { root.appendingPathComponent("opened.txt") }
         var fakeOpen: URL { root.appendingPathComponent("fake-open.sh") }
@@ -137,7 +137,7 @@ import Testing
         #expect(!box.exists(box.target))
         #expect(box.version(of: box.backup) == "old")
         #expect(box.openedPaths() == [box.fallback.path])
-        #expect(box.failureText() == "The new version couldn't be moved to Applications, and the previous version couldn't be put back. It is kept in the Applications folder as .Mac Toolkit.app.update-backup.\n")
+        #expect(box.failureText() == "The new version couldn't be moved to Applications, and the previous version couldn't be put back. It is kept in the Applications folder as Mac Toolkit (previous version).app.\n")
     }
 
     @Test func rollbackFailureLaunchesBackupWithoutFallback() throws {
