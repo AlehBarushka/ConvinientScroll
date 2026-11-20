@@ -86,4 +86,35 @@ import Testing
             }
         }
     }
+
+    @Test func cancellationStopsChildPromptly() async {
+        let started = Date()
+        let task = Task { await DiskImage.run("/bin/sleep", ["30"]) }
+        try? await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+        let outcome = await task.value
+
+        #expect(outcome.cancelled)
+        #expect(Date().timeIntervalSince(started) < 5)
+    }
+
+    @Test func timeoutStopsChild() async {
+        let started = Date()
+        let outcome = await DiskImage.run("/bin/sleep", ["30"], timeout: 0.3)
+
+        #expect(outcome.timedOut)
+        #expect(!outcome.cancelled)
+        #expect(Date().timeIntervalSince(started) < 5)
+    }
+
+    @Test func cancelledBeforeStartDoesNotRun() async {
+        let task = Task {
+            try? await Task.sleep(for: .seconds(30))
+            return await DiskImage.run("/bin/sleep", ["30"])
+        }
+        task.cancel()
+        let outcome = await task.value
+
+        #expect(outcome.cancelled)
+    }
 }
