@@ -50,10 +50,13 @@ struct UpdateView: View {
         switch model.state {
         case .idle, .checking, .downloading:
             Button("Cancel", action: close)
+                .keyboardShortcut(.cancelAction)
         case .upToDate:
             Button("OK", action: close)
+                .keyboardShortcut(.cancelAction)
         case .available:
             Button("Not Now", action: close)
+                .keyboardShortcut(.cancelAction)
             Button("View on GitHub") { model.viewOnGitHub() }
             Button("Install and Relaunch") { model.installUpdate() }
                 .keyboardShortcut(.defaultAction)
@@ -65,6 +68,12 @@ struct UpdateView: View {
             }
             Button("OK", action: close)
                 .keyboardShortcut(.defaultAction)
+                .background(
+                    Button("", action: close)
+                        .keyboardShortcut(.cancelAction)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                )
         }
     }
 }
