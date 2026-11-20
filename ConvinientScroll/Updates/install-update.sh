@@ -37,7 +37,7 @@ rm -rf "$backup"
 
 had_backup=0
 if [ -e "$target" ]; then
-    if ! "$move_cmd" "$target" "$backup"; then
+    if [ -e "$backup" ] || ! "$move_cmd" "$target" "$backup"; then
         fail "The old version couldn't be moved aside."
         launch "$fallback"
         exit 1
@@ -45,10 +45,24 @@ if [ -e "$target" ]; then
     had_backup=1
 fi
 
-if ! "$move_cmd" "$staged" "$target"; then
-    rm -rf "$target"
+if [ -e "$target" ] || ! "$move_cmd" "$staged" "$target"; then
+    restored=1
     if [ "$had_backup" -eq 1 ]; then
-        /bin/mv "$backup" "$target"
+        rm -rf "$target"
+        if [ -e "$target" ] || ! "$move_cmd" "$backup" "$target"; then
+            restored=0
+        fi
+    else
+        rm -rf "$target"
+    fi
+    if [ "$restored" -eq 0 ]; then
+        fail "The new version couldn't be moved to Applications, and the previous version couldn't be put back. It is kept in the Applications folder as $(basename "$backup")."
+        if [ -e "$fallback" ]; then
+            launch "$fallback"
+        else
+            launch "$backup"
+        fi
+        exit 1
     fi
     fail "The new version couldn't be moved to Applications."
     if [ "$had_backup" -eq 1 ]; then
