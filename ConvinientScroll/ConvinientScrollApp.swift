@@ -41,6 +41,7 @@ final class AppServices {
     private var statusBar: StatusBarController?
     private var autoNaturalScroll: AutoNaturalScrollController?
     private var shelf: ShelfController?
+    private var memory: MemoryController?
     private var settingsWindow: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
 
@@ -62,6 +63,7 @@ final class AppServices {
         }
 
         startShelf()
+        startMemory()
 
         if statusBar == nil {
             statusBar = StatusBarController(
@@ -88,6 +90,16 @@ final class AppServices {
             .store(in: &cancellables)
 
         settings.$shelfEnabled
+            .removeDuplicates()
+            .sink { controller.setEnabled($0) }
+            .store(in: &cancellables)
+    }
+
+    private func startMemory() {
+        guard memory == nil else { return }
+        let controller = MemoryController()
+        memory = controller
+        settings.$memoryEnabled
             .removeDuplicates()
             .sink { controller.setEnabled($0) }
             .store(in: &cancellables)

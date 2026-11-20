@@ -10,7 +10,7 @@ import AppKit
 
 struct SettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case general, scroll, shelf
+        case general, scroll, shelf, memory
 
         var id: String { rawValue }
 
@@ -19,6 +19,7 @@ struct SettingsView: View {
             case .general: "General"
             case .scroll: "Scrolling"
             case .shelf: "File Shelf"
+            case .memory: "Memory"
             }
         }
 
@@ -27,6 +28,7 @@ struct SettingsView: View {
             case .general: "gearshape"
             case .scroll: "computermouse"
             case .shelf: "tray.full"
+            case .memory: "memorychip"
             }
         }
     }
@@ -46,6 +48,7 @@ struct SettingsView: View {
                 case .general: GeneralSettings()
                 case .scroll: ScrollSettings()
                 case .shelf: ShelfSettings()
+                case .memory: MemorySettings()
                 }
             }
             .formStyle(.grouped)
@@ -191,6 +194,20 @@ private struct ShelfSettings: View {
         guard count > 0 else { return "Empty" }
         let size = ByteCountFormatter.string(fromByteCount: store.totalSize, countStyle: .file)
         return count == 1 ? "1 file · \(size)" : "\(count) files · \(size)"
+    }
+}
+
+private struct MemorySettings: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Show memory usage in the menu bar", isOn: $settings.memoryEnabled)
+            } footer: {
+                Text("Shows the share of RAM in use, counted as in Activity Monitor. It updates every 2 seconds and pauses while the display is off. The number turns yellow or red when macOS reports memory pressure.")
+            }
+        }
     }
 }
 

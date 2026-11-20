@@ -8,6 +8,7 @@ final class AppSettings: ObservableObject {
         static let autoScrollEnabled = "modules.autoScroll.enabled"
         static let shelfEnabled = "modules.shelf.enabled"
         static let shelfRetention = "shelf.retention"
+        static let memoryEnabled = "modules.memory.enabled"
     }
 
     /// How long a file stays on the shelf, counted from the moment it was added.
@@ -56,6 +57,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(shelfRetention.rawValue, forKey: Key.shelfRetention) }
     }
 
+    @Published var memoryEnabled: Bool {
+        didSet { defaults.set(memoryEnabled, forKey: Key.memoryEnabled) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -63,11 +68,13 @@ final class AppSettings: ObservableObject {
         defaults.register(defaults: [
             Key.autoScrollEnabled: true,
             Key.shelfEnabled: true,
-            Key.shelfRetention: ShelfRetention.oneDay.rawValue
+            Key.shelfRetention: ShelfRetention.oneDay.rawValue,
+            Key.memoryEnabled: false
         ])
         autoScrollEnabled = defaults.bool(forKey: Key.autoScrollEnabled)
         shelfEnabled = defaults.bool(forKey: Key.shelfEnabled)
         shelfRetention = defaults.string(forKey: Key.shelfRetention)
             .flatMap(ShelfRetention.init(rawValue:)) ?? .oneDay
+        memoryEnabled = defaults.bool(forKey: Key.memoryEnabled)
     }
 }

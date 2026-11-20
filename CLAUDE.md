@@ -2,7 +2,7 @@
 
 ## Для чего проект
 
-Утилита для macOS в menu bar. С ноября 2026 продукт называется **Mac Toolkit** (`MacToolkit.app`); проект, таргет, схема, папки и bundle id `com.alehbarushka.convinientscroll` остались прежними. В ней два модуля, каждый выключается в настройках.
+Утилита для macOS в menu bar. С ноября 2026 продукт называется **Mac Toolkit** (`MacToolkit.app`); проект, таргет, схема, папки и bundle id `com.alehbarushka.convinientscroll` остались прежними. В ней три модуля, каждый выключается в настройках.
 
 **Автоскролл** сам переключает «Natural scrolling» в зависимости от того, что сейчас подключено: мышь или трекпад.
 
@@ -12,6 +12,8 @@
 
 Это избавляет от ручного переключения в System Settings при каждой смене устройства.
 
+**Память** (по умолчанию выключен): отдельный пункт в menu bar с долей занятой RAM, как «Memory Used» в Activity Monitor. Цифра желтеет или краснеет, когда macOS сообщает о нехватке памяти; по клику меню с объёмом в ГБ и кнопкой Activity Monitor.
+
 **Полка файлов**: файл перетаскивают к нотчу (или в верх-центр экрана без нотча), полка копирует его (APFS clone) и хранит заданное время; на другом Space наводят мышь на зону и вытаскивают файл в любое приложение. Файлы больше 1 ГБ с другого тома хранятся ссылкой (bookmark).
 
 Приложение фоновое (`LSUIElement`): иконки в Dock нет, окно настроек открывается из меню. Требуется macOS 26.4 и новее.
@@ -19,18 +21,20 @@
 ## Как это устроено
 
 - В простое ничего не тикает: постоянных таймеров нет, всё по событиям системы. Не добавляй опрос по таймеру.
+  Единственное исключение — модуль памяти: macOS не сообщает долю занятой RAM событиями, поэтому `MemoryController` читает её таймером раз в 2 с (leeway 20%). Таймер есть, только пока модуль включён, и останавливается на сон, погасший экран и переключение пользователя; UI перерисовывается только при смене целого процента или уровня давления, давление приходит событиями `DispatchSource`. Новые исключения без согласования с владельцем не добавляй.
 - `DevicePresenceMonitor` подписан на уведомления `IOKit` о появлении и исчезновении HID-устройств (плюс пересчёт после сна) и по ним обходит реестр, выставляя флаги `hasMouse` и `hasTrackpad`. Если реестр менялся во время обхода, обход повторяется.
 - `AutoNaturalScrollController` решает, что делать: трекпад и нет мыши — включить, есть мышь — выключить, ничего не найдено или модуль выключен — не трогать. Есть debounce 200 мс и до трёх повторов записи через 5 с (разовый таймер только после неудачи).
 - `NaturalScrollSettingMonitor` пишет глобальную настройку `com.apple.swipescrolldirection` через `CFPreferences`, при неудаче через `defaults write`, и применяет её сразу приватной функцией из `PreferencePanesSupport`. Вызовы `defaults` ограничены по времени.
   Значение перечитывается по distributed notification `SwipeScrollDirectionDidChangeNotification`, после сна и при открытии настроек.
 - `StatusBarController` (иконка и меню: Show Shelf, Settings…, Launch at Login), `LaunchAtLoginManager` (автозапуск через `SMAppService`), `AppSettings` (переключатели модулей и срок хранения в `UserDefaults`), `SettingsView` и `SettingsWindowController` (окно настроек; создаётся по запросу и освобождается при закрытии), `AppLog` (журнал через `os.Logger`).
+- `Memory/`: `MemoryUsage` (формула: `internal − purgeable + wired + compressor` страниц ядра от `hw.memsize`, округление до целого процента), `SystemMemory` (`host_statistics64` и уровень давления через `sysctl`), `MemoryMonitor` (когда читать и когда перерисовывать; таймер и источник данных подставляются, поэтому покрыт тестами), `MemoryController` (пункт menu bar, меню, источник давления, уведомления о сне).
 - `FileShelf/`: `ShelfStore` (файлы и `index.json` в `~/Library/Application Support/<bundle id>/Shelf`, I/O вне главного потока, очистка по сроку разовым таймером), `ShelfController` (панель на каждый экран, глобальный монитор мыши только для отслеживания перетаскивания), `ShelfPanel` (неактивирующая `NSPanel`, приём файлов, наведение, размеры окна по состоянию), `ShelfGeometry` (нотч и размеры формы), `ShelfView` (SwiftUI-форма и карточки), `ShelfSelection` (правила выбора карточек, как в Finder), `ShelfDragSource` (клики по карточке и вынос файлов через `NSDraggingSource`), `ThumbnailCache` (миниатюры только в памяти, чистятся после сворачивания).
 
 ## Структура репозитория
 
 ```
-ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки
-ConvinientScrollTests/       unit-тесты (Swift Testing): хранилище и геометрия полки
+ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки, Memory/ — модуль памяти
+ConvinientScrollTests/       unit-тесты (Swift Testing): полка и модуль памяти
 ConvinientScroll.xcodeproj/  проект Xcode, версия и подпись заданы здесь
 scripts/make-dmg.sh          сборка Release и упаковка в dist/MacToolkit-<версия>.dmg
 scripts/render-dmg-background.swift  рисует фон окна образа
