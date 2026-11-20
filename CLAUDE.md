@@ -26,14 +26,15 @@
 - `AutoNaturalScrollController` решает, что делать: трекпад и нет мыши — включить, есть мышь — выключить, ничего не найдено или модуль выключен — не трогать. Есть debounce 200 мс и до трёх повторов записи через 5 с (разовый таймер только после неудачи).
 - `NaturalScrollSettingMonitor` пишет глобальную настройку `com.apple.swipescrolldirection` через `CFPreferences`, при неудаче через `defaults write`, и применяет её сразу приватной функцией из `PreferencePanesSupport`. Вызовы `defaults` ограничены по времени.
   Значение перечитывается по distributed notification `SwipeScrollDirectionDidChangeNotification`, после сна и при открытии настроек.
-- `StatusBarController` (иконка и меню: Show Shelf, Settings…, Launch at Login), `LaunchAtLoginManager` (автозапуск через `SMAppService`), `AppSettings` (переключатели модулей и срок хранения в `UserDefaults`), `SettingsView` и `SettingsWindowController` (окно настроек; создаётся по запросу и освобождается при закрытии), `AppLog` (журнал через `os.Logger`).
+- `StatusBarController` (иконка и меню: Show Shelf, Settings…, Check for Updates…, Launch at Login), `LaunchAtLoginManager` (автозапуск через `SMAppService`), `AppSettings` (переключатели модулей и срок хранения в `UserDefaults`), `SettingsView` и `SettingsWindowController` (окно настроек; создаётся по запросу и освобождается при закрытии), `AppLog` (журнал через `os.Logger`).
 - `Memory/`: `MemoryUsage` (формула: `internal − purgeable + wired + compressor` страниц ядра от `hw.memsize`, округление до целого процента), `SystemMemory` (`host_statistics64` и уровень давления через `sysctl`), `MemoryMonitor` (когда читать и когда перерисовывать; таймер и источник данных подставляются, поэтому покрыт тестами), `MemoryController` (пункт menu bar, меню, источник давления, уведомления о сне).
 - `FileShelf/`: `ShelfStore` (файлы и `index.json` в `~/Library/Application Support/<bundle id>/Shelf`, I/O вне главного потока, очистка по сроку разовым таймером), `ShelfController` (панель на каждый экран, глобальный монитор мыши только для отслеживания перетаскивания), `ShelfPanel` (неактивирующая `NSPanel`, приём файлов, наведение, размеры окна по состоянию), `ShelfGeometry` (нотч и размеры формы), `ShelfView` (SwiftUI-форма и карточки), `ShelfSelection` (правила выбора карточек, как в Finder), `ShelfDragSource` (клики по карточке и вынос файлов через `NSDraggingSource`), `ThumbnailCache` (миниатюры только в памяти, чистятся после сворачивания).
+- `Updates/` (встроенное обновление, только по ручной команде `Check for Updates…` из меню или настроек; фоновых проверок нет): `AppVersion` (разбор и числовое сравнение версий), `ReleaseFeed` (запрос `releases/latest` на GitHub, выбор первого `.dmg`), `UpdateError` (ошибки и их тексты), `UpdateModel` (состояния окна и действия), `UpdateWindow` (окно Software Update), `UpdateInstaller` (скачивание, проверка и установка в `/Applications`), `DiskImage` (монтирование образа и извлечение `MacToolkit.app`), `CodeSignature` (проверка подписи: тот же Team ID, bundle id и версия, что в теге), `install-update.sh` (помощник: подменяет приложение, при неудаче откатывает и пишет причину в `failure.txt`), `PendingUpdate` (запись о начатом обновлении в `UserDefaults`), `UpdateLaunchReport` (при запуске сообщает об итоге прошлого обновления и возвращает автозапуск).
 
 ## Структура репозитория
 
 ```
-ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки, Memory/ — модуль памяти
+ConvinientScroll/            исходники приложения (Swift, SwiftUI) и ассеты; FileShelf/ — модуль полки, Memory/ — модуль памяти, Updates/ — встроенное обновление
 ConvinientScrollTests/       unit-тесты (Swift Testing): полка и модуль памяти
 ConvinientScroll.xcodeproj/  проект Xcode, версия и подпись заданы здесь
 scripts/make-dmg.sh          сборка Release и упаковка в dist/MacToolkit-<версия>.dmg
@@ -42,6 +43,7 @@ scripts/render-app-icon.swift  рисует иконку приложения в
 LICENSE.md                   PolyForm Noncommercial 1.0.0: личное и некоммерческое использование, без коммерческого
 dmg/                         готовый фон окна образа (1x и 2x), коммитится
 dist/                        результат сборки образа, в git не попадает
+docs/superpowers/            планы и заметки по работе над фичами, в git не попадает
 ```
 
 Тесты: `xcodebuild -project ConvinientScroll.xcodeproj -scheme ConvinientScroll test` (или ⌘U). Тесты запускаются внутри приложения, поэтому `AppServices.start()` при запуске под XCTest ничего не делает: тесты не трогают menu bar и системную настройку.
@@ -57,6 +59,7 @@ dist/                        результат сборки образа, в gi
 1. Поднять `MARKETING_VERSION` и `CURRENT_PROJECT_VERSION` в `project.pbxproj` отдельным коммитом `chore: update version`.
 2. Собрать образ скриптом, проверить подпись приложения внутри него и убедиться, что в нём нет личных данных (пути `/Users/…`, лишние идентификаторы).
 3. Поставить тег с номером версии без префикса (`1.1.3`) на этот коммит и приложить образ к релизу на GitHub.
+4. Team ID подписи должен совпадать с прошлыми релизами: встроенное обновление отказывается ставить версию с другим Team ID. Ассет релиза ровно один `.dmg`. В описании релиза раздел «Updating» для версий, которые обновляются встроенным механизмом, говорит «Choose Check for Updates… in the menu bar».
 
 Сообщения коммитов в стиле `feat:`, `fix:`, `chore:`, `docs:`.
 
