@@ -322,3 +322,16 @@ import Testing
         #expect(url.path.hasPrefix(URL.applicationSupportDirectory.path))
     }
 }
+
+@Suite("UpdateDownload") struct UpdateDownloadTests {
+    @Test func downloadsFileURL() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "download-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appending(path: "source.dmg")
+        try Data("image".utf8).write(to: source)
+        let destination = root.appending(path: "update.dmg")
+        try await UpdateInstallerEnvironment.download(source, to: destination) { _ in }
+        #expect(try Data(contentsOf: destination) == Data("image".utf8))
+    }
+}

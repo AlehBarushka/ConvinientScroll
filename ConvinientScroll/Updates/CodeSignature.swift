@@ -7,13 +7,13 @@ nonisolated struct SigningIdentity: Equatable, Sendable {
 }
 
 nonisolated enum CodeSignature {
-    static func identity(ofAppAt url: URL) throws(UpdateError) -> SigningIdentity {
+    static func identity(ofAppAt url: URL, pinnedTo pinned: SigningIdentity? = nil) throws(UpdateError) -> SigningIdentity {
         var staticCode: SecStaticCode?
         guard SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode) == errSecSuccess,
               let staticCode else { throw .signatureInvalid }
 
         var requirement: SecRequirement?
-        guard SecRequirementCreateWithString("anchor apple generic" as CFString, [], &requirement) == errSecSuccess,
+        guard SecRequirementCreateWithString(requirementText(pinnedTo: pinned) as CFString, [], &requirement) == errSecSuccess,
               let requirement else { throw .signatureInvalid }
 
         let flags = SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures | kSecCSCheckNestedCode)
@@ -29,6 +29,16 @@ nonisolated enum CodeSignature {
         else { throw .signatureInvalid }
 
         return SigningIdentity(teamID: teamID, bundleID: bundleID)
+    }
+
+    static func requirementText(pinnedTo pinned: SigningIdentity?) -> String {
+        guard let pinned else { return "anchor apple generic" }
+        return "anchor apple generic and certificate leaf[subject.OU] = \(quoted(pinned.teamID)) and identifier \(quoted(pinned.bundleID))"
+    }
+
+    private static func quoted(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
     }
 
     static func currentIdentity() throws(UpdateError) -> SigningIdentity {

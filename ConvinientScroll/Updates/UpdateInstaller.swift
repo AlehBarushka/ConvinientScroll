@@ -20,22 +20,34 @@ struct UpdateInstallerEnvironment {
     var targetURL: URL
     var currentAppURL: URL
 
+    static let appName = "MacToolkit.app"
+
+    nonisolated static func download(
+        _ url: URL,
+        to destination: URL,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let observer = DownloadProgressObserver(report: progress)
+        defer { observer.invalidate() }
+        let (location, response) = try await URLSession.shared.download(for: URLRequest(url: url), delegate: observer)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        try FileManager.default.moveItem(at: location, to: destination)
+    }
+
     static func live(launchAtLogin: LaunchAtLoginManager) -> Self {
-        let appName = Bundle.main.bundleURL.lastPathComponent
+        let appName = Self.appName
         return Self(
             download: { url, destination, progress in
-                let observer = DownloadProgressObserver(report: progress)
-                defer { observer.invalidate() }
-                let (location, response) = try await URLSession.shared.download(for: URLRequest(url: url), delegate: observer)
-                try FileManager.default.moveItem(at: location, to: destination)
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
-                }
+                try await Self.download(url, to: destination, progress: progress)
             },
             extractApp: { dmg, staging throws(UpdateError) in
                 try await DiskImage.extractApp(named: appName, from: dmg, into: staging)
             },
-            identity: { app throws(UpdateError) in try CodeSignature.identity(ofAppAt: app) },
+            identity: { app throws(UpdateError) in
+                try CodeSignature.identity(ofAppAt: app, pinnedTo: CodeSignature.currentIdentity())
+            },
             currentIdentity: { () throws(UpdateError) in try CodeSignature.currentIdentity() },
             versionOfApp: { app in
                 guard let data = try? Data(contentsOf: app.appending(path: "Contents/Info.plist")),
@@ -54,6 +66,7 @@ struct UpdateInstallerEnvironment {
                 let process = Process()
                 process.executableURL = URL(filePath: executable)
                 process.arguments = Array(arguments.dropFirst())
+                process.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("MT_UPDATE_") }
                 process.standardInput = FileHandle.nullDevice
                 process.standardOutput = FileHandle.nullDevice
                 process.standardError = FileHandle.nullDevice

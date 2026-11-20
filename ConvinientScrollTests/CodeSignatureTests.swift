@@ -59,4 +59,17 @@ import Testing
         #expect(id.bundleID == Bundle.main.bundleIdentifier)
         #expect(!id.teamID.isEmpty)
     }
+
+    @Test func pinningToAnotherTeamRejectsTestHost() throws {
+        let host = try CodeSignature.identity(ofAppAt: Bundle.main.bundleURL)
+        let other = SigningIdentity(teamID: host.teamID + "X", bundleID: host.bundleID)
+        #expect(throws: UpdateError.signatureInvalid) {
+            try CodeSignature.identity(ofAppAt: Bundle.main.bundleURL, pinnedTo: other)
+        }
+    }
+
+    @Test func pinningToOwnIdentityAcceptsTestHost() throws {
+        let host = try CodeSignature.identity(ofAppAt: Bundle.main.bundleURL)
+        #expect(try CodeSignature.identity(ofAppAt: Bundle.main.bundleURL, pinnedTo: host) == host)
+    }
 }
