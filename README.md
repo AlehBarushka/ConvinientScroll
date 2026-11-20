@@ -1,9 +1,10 @@
-# Mac Toolkit 🖱️↔️🖲️ · 🗂️
+# Mac Toolkit 🖱️↔️🖲️ · 🗂️ · 📊
 
-A small menu bar utility for macOS (formerly **ConvinientScroll**) with two modules, each of which can be turned off in Settings:
+A small menu bar utility for macOS (formerly **ConvinientScroll**) with three modules, each of which can be turned on or off in Settings:
 
 - **Scrolling** — automatically switches “Natural scrolling” depending on what’s connected: a **mouse** or a **trackpad**.
 - **File Shelf** — drag files to the notch (or the top centre of any display), switch to another Space, and drag them out again.
+- **Memory** — shows the share of RAM in use in the menu bar, counted as in Activity Monitor.
 
 ---
 
@@ -33,6 +34,15 @@ Dragging a file into an app on another Space doesn’t work: the drag is lost wh
 - Files are removed after **1 hour, 24 hours or 7 days** (Settings), or with **Clear**. Double-click a card to open the file, hover it and click ✕ to remove it.
 - **Show Shelf** in the menu bar menu opens it without hovering.
 
+### Memory
+
+Off by default; turn it on in **Settings → Memory**.
+
+- A separate menu bar item shows the share of RAM in use, for example **57%**, counted the same way as **Memory Used** in Activity Monitor: app memory, wired and compressed, without file cache.
+- The number turns **yellow** when macOS reports memory pressure and **red** when it becomes critical.
+- Click it to see the amount in GB and the pressure level, or to open Activity Monitor.
+- Hold ⌘ and drag the item to move it along the menu bar.
+
 ---
 
 ## 🧠 How it works
@@ -55,7 +65,13 @@ Dragging a file into an app on another Space doesn’t work: the drag is lost wh
 - While a drag is in progress, a mouse monitor watches how close a file gets to the zone (it does nothing otherwise and needs no permission).
 - Files live in `~/Library/Application Support/com.alehbarushka.convinientscroll/Shelf`. A one-shot timer removes them when they expire.
 
-When idle, the app runs no periodic timers: everything is driven by system notifications.
+**Memory**
+
+- macOS has no notification for memory usage, so the module reads `host_statistics64` every 2 seconds with a 20% leeway, letting the system batch the wake-ups. Used memory is `internal − purgeable + wired + compressor` pages out of the installed RAM.
+- The menu bar item is redrawn only when the whole percentage or the pressure level changes. Pressure comes from a `DispatchSource` memory pressure event, not from polling.
+- The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active.
+
+Apart from the Memory module, the app runs no periodic timers when idle: everything is driven by system notifications.
 
 ---
 
@@ -119,6 +135,8 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
   - Detection is based on HID properties and the device `product` string, so some devices may require additional heuristics
 - **The shelf doesn’t appear**
   - Check that **File Shelf** is on in Settings; an empty shelf is invisible until a file is dragged close
+- **The memory item is missing**
+  - Check that **Memory** is on in Settings; on a crowded menu bar the item can be hidden behind the notch, so ⌘-drag it closer to the clock
 
 ---
 
@@ -127,6 +145,7 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
 - Apple `IOKit` / HID — device information access
 - macOS preferences (`CFPreferences`) — system preference synchronization
 - Quick Look Thumbnailing — shelf card previews
+- Mach host statistics (`host_statistics64`) — memory usage
 
 ---
 
