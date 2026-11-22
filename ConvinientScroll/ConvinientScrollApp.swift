@@ -74,6 +74,7 @@ final class AppServices {
                 devicePresence: devicePresence,
                 launchAtLogin: launchAtLogin,
                 settings: settings,
+                modules: [memory as MenuBarModule?, thermal].compactMap { $0 },
                 onShowShelf: { [weak self] in self?.shelf?.showShelf() },
                 onOpenSettings: { [weak self] in self?.openSettings() },
                 onCheckForUpdates: { [weak self] in self?.checkForUpdates() }

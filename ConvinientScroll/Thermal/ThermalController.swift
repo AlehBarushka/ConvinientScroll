@@ -3,7 +3,7 @@ import Combine
 import OSLog
 
 @MainActor
-final class ThermalController: NSObject, NSMenuDelegate {
+final class ThermalController: MenuBarModule {
     var alertsEnabled: Bool {
         get { monitor.alertsEnabled }
         set { monitor.alertsEnabled = newValue }
@@ -20,15 +20,14 @@ final class ThermalController: NSObject, NSMenuDelegate {
     )
     private var isEnabled = false
     private var isMenuOpen = false
-    private var statusItem: NSStatusItem?
-    private var detailItem: NSMenuItem?
-    private var statisticsItem: NSMenuItem?
+    private(set) var segment: MenuBarSegment?
+    var onChange: (() -> Void)?
+    private let detailItem = ThermalController.makeRow()
+    private let statisticsItem = ThermalController.makeRow()
+    var menuItems: [NSMenuItem] { [detailItem, statisticsItem] }
     private var pauseObserver: WorkspacePauseObserver?
 
-    private let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
-
-    override init() {
-        super.init()
+    init() {
         monitor.onDisplayChange = { [weak self] in self?.show($0) }
         monitor.onAlert = { NotificationService.shared.showThrottling($0) }
     }
@@ -48,7 +47,7 @@ final class ThermalController: NSObject, NSMenuDelegate {
     private func start() {
         pressure.start { [weak self] in self?.monitor.levelChanged($0) }
         monitor.levelChanged(pressure.current())
-        makeStatusItem()
+        show(monitor.display)
         sampling.start()
         pauseObserver = WorkspacePauseObserver { [weak self] reason, paused in
             guard let self else { return }
@@ -68,94 +67,42 @@ final class ThermalController: NSObject, NSMenuDelegate {
         }
         pressure.stop()
         sampling.stop()
-        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
-        statusItem = nil
-        detailItem = nil
-        statisticsItem = nil
+        show(monitor.display)
         AppLog.thermal.info("Thermal module stopped")
     }
 
     // MARK: Menu bar
 
-    private func makeStatusItem() {
-        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-        let image = NSImage(systemSymbolName: "thermometer.medium", accessibilityDescription: "CPU temperature")?
-            .withSymbolConfiguration(config)
-        image?.isTemplate = true
-        let textWidth = ("188°" as NSString).size(withAttributes: [.font: font]).width
-        let item = NSStatusBar.system.statusItem(withLength: ceil((image?.size.width ?? 0) + textWidth + 8))
-        item.autosaveName = "MacToolkitThermal"
-        if let button = item.button {
-            button.image = image
-            button.imagePosition = .imageLeading
-            button.font = font
-        }
-
-        let menu = NSMenu()
-        menu.delegate = self
-        let detail = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        detail.isEnabled = false
-        menu.addItem(detail)
-        let statistics = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        statistics.isEnabled = false
-        menu.addItem(statistics)
-        menu.addItem(.separator())
-        let open = NSMenuItem(title: "Open Activity Monitor", action: #selector(openActivityMonitor), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-        item.menu = menu
-
-        statusItem = item
-        detailItem = detail
-        statisticsItem = statistics
-        show(monitor.display)
+    private static func makeRow() -> NSMenuItem {
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
     }
 
     private func show(_ display: ThermalMonitor.Display) {
-        guard let button = statusItem?.button else { return }
-        let text = ThermalText.menuBar(celsius: display.celsius)
-        let color: NSColor? = switch display.level?.tint ?? .none {
-        case .none: nil
-        case .warning: .systemYellow
-        case .critical: .systemRed
-        }
-        button.contentTintColor = color
-        if let color {
-            button.attributedTitle = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
-        } else {
-            button.title = text
-        }
-        let level = display.level?.title.lowercased() ?? "unknown"
-        button.setAccessibilityValue("CPU \(text), thermal pressure \(level)")
+        segment = isEnabled ? display.segment : nil
+        onChange?()
     }
 
     private func refreshMenu() {
-        detailItem?.title = ThermalText.detail(
+        detailItem.title = ThermalText.detail(
             celsius: monitor.display.celsius,
             fanPercent: monitor.lastSample?.fanPercent,
             level: monitor.display.level
         )
-        statisticsItem?.title = ThermalText.statistics(monitor.statistics.durations(at: Date()))
+        statisticsItem.title = ThermalText.statistics(monitor.statistics.durations(at: Date()))
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
+    func menuWillOpen() {
         isMenuOpen = true
         refreshMenu()
         monitor.onUpdate = { [weak self] in self?.refreshMenu() }
         monitor.refreshNow()
     }
 
-    func menuDidClose(_ menu: NSMenu) {
+    func menuDidClose() {
         isMenuOpen = false
         monitor.onUpdate = nil
-    }
-
-    @objc private func openActivityMonitor() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") else {
-            AppLog.thermal.error("Activity Monitor not found")
-            return
-        }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 }
 

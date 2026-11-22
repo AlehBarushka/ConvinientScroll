@@ -2,22 +2,25 @@ import AppKit
 import Combine
 import OSLog
 
-/// Runs the memory module: a menu bar item with the share of RAM in use. It reads
+/// Runs the memory module: a menu bar segment with the share of RAM in use. It reads
 /// statistics on a 2 s timer only while the module is on and the display is awake;
 /// pressure colours come from system events.
 @MainActor
-final class MemoryController: NSObject, NSMenuDelegate {
+final class MemoryController: MenuBarModule {
     private let monitor = MemoryMonitor(read: SystemMemory.usage, schedule: RepeatingTimer.dispatch)
     private var isEnabled = false
-    private var statusItem: NSStatusItem?
-    private var detailItem: NSMenuItem?
+    private(set) var segment: MenuBarSegment?
+    var onChange: (() -> Void)?
+    private let detailItem: NSMenuItem = {
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }()
+    var menuItems: [NSMenuItem] { [detailItem] }
     private var pressureSource: DispatchSourceMemoryPressure?
     private var pauseObserver: WorkspacePauseObserver?
 
-    private let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
-
-    override init() {
-        super.init()
+    init() {
         monitor.onDisplayChange = { [weak self] in self?.show($0) }
     }
 
@@ -34,7 +37,7 @@ final class MemoryController: NSObject, NSMenuDelegate {
     // MARK: Lifecycle
 
     private func start() {
-        makeStatusItem()
+        show(monitor.display)
         monitor.pressureChanged(SystemMemory.pressure())
         startPressureSource()
         observeWorkspace()
@@ -51,9 +54,7 @@ final class MemoryController: NSObject, NSMenuDelegate {
         }
         pressureSource?.cancel()
         pressureSource = nil
-        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
-        statusItem = nil
-        detailItem = nil
+        show(monitor.display)
     }
 
     private func startPressureSource() {
@@ -84,62 +85,15 @@ final class MemoryController: NSObject, NSMenuDelegate {
 
     // MARK: Menu bar
 
-    private func makeStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.autosaveName = "MacToolkitMemory"
-        if let button = item.button {
-            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-            let image = NSImage(systemSymbolName: "memorychip", accessibilityDescription: "Memory")?
-                .withSymbolConfiguration(config)
-            image?.isTemplate = true
-            button.image = image
-            button.imagePosition = .imageLeading
-            button.font = font
-        }
-
-        let menu = NSMenu()
-        menu.delegate = self
-        let detail = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        detail.isEnabled = false
-        menu.addItem(detail)
-        menu.addItem(.separator())
-        let open = NSMenuItem(title: "Open Activity Monitor", action: #selector(openActivityMonitor), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-        item.menu = menu
-
-        statusItem = item
-        detailItem = detail
-        show(monitor.display)
-    }
-
     private func show(_ display: MemoryMonitor.Display) {
-        guard let button = statusItem?.button else { return }
-        let text = display.percent.map { "\($0)%" } ?? "—%"
-        let color: NSColor? = switch display.pressure {
-        case .normal: nil
-        case .warning: .systemYellow
-        case .critical: .systemRed
-        }
-        button.contentTintColor = color
-        if let color {
-            button.attributedTitle = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
-        } else {
-            button.title = text
-        }
-        button.setAccessibilityValue("\(text) memory used, pressure \(display.pressure.title.lowercased())")
+        segment = isEnabled ? display.segment : nil
+        onChange?()
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
-        detailItem?.title = monitor.currentUsage()?.detailText(pressure: monitor.display.pressure)
+    func menuWillOpen() {
+        detailItem.title = monitor.currentUsage()?.detailText(pressure: monitor.display.pressure)
             ?? "Memory usage is unavailable"
     }
 
-    @objc private func openActivityMonitor() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") else {
-            AppLog.memory.error("Activity Monitor not found")
-            return
-        }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-    }
+    func menuDidClose() {}
 }

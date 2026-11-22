@@ -7,8 +7,13 @@ final class StatusBarController {
     private let statusItem: NSStatusItem
     private var cancellables = Set<AnyCancellable>()
     private var pendingState: IconState?
+    private var shownState: IconState?
     private var updateScheduled = false
     private let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+    private let segmentSymbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+    private let segmentFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
+    private let modules: [MenuBarModule]
+    private var statusMenu: StatusBarMenu?
     private weak var launchAtLogin: LaunchAtLoginManager?
     private var launchAtLoginMenuItem: NSMenuItem?
     private let onShowShelf: () -> Void
@@ -19,40 +24,47 @@ final class StatusBarController {
         devicePresence: DevicePresenceMonitor,
         launchAtLogin: LaunchAtLoginManager,
         settings: AppSettings,
+        modules: [MenuBarModule],
         onShowShelf: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void
     ) {
         self.launchAtLogin = launchAtLogin
+        self.modules = modules
         self.onShowShelf = onShowShelf
         self.onOpenSettings = onOpenSettings
         self.onCheckForUpdates = onCheckForUpdates
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleProportionallyDown
         }
 
-        let menu = NSMenu()
+        var baseItems: [NSMenuItem] = []
         let shelfItem = NSMenuItem(title: "Show Shelf", action: #selector(showShelf), keyEquivalent: "")
         shelfItem.target = self
         shelfItem.image = makeSymbol("tray.full")
-        menu.addItem(shelfItem)
+        baseItems.append(shelfItem)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
-        menu.addItem(settingsItem)
+        baseItems.append(settingsItem)
         let updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         updatesItem.target = self
-        menu.addItem(updatesItem)
-        menu.addItem(.separator())
+        baseItems.append(updatesItem)
+        baseItems.append(.separator())
         let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         launchItem.target = self
-        menu.addItem(launchItem)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Mac Toolkit", action: #selector(quit), keyEquivalent: "q"))
-        menu.items.last?.target = self
-        statusItem.menu = menu
+        baseItems.append(launchItem)
+        baseItems.append(.separator())
+        let quitItem = NSMenuItem(title: "Quit Mac Toolkit", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        baseItems.append(quitItem)
+        let activityItem = NSMenuItem(title: "Open Activity Monitor", action: #selector(openActivityMonitor), keyEquivalent: "")
+        activityItem.target = self
+        let statusMenu = StatusBarMenu(modules: modules, baseItems: baseItems, openActivityMonitor: activityItem)
+        self.statusMenu = statusMenu
+        statusItem.menu = statusMenu.menu
 
         launchAtLoginMenuItem = launchItem
         syncLaunchAtLoginMenuItem()
@@ -79,6 +91,10 @@ final class StatusBarController {
             }
             .store(in: &cancellables)
 
+        for module in modules {
+            module.onChange = { [weak self] in self?.scheduleIconUpdate(nil) }
+        }
+
         scheduleIconUpdate(IconState(
             hasMouse: devicePresence.hasMouse,
             hasTrackpad: devicePresence.hasTrackpad,
@@ -90,6 +106,14 @@ final class StatusBarController {
         var hasMouse: Bool
         var hasTrackpad: Bool
         var showsDevices: Bool
+    }
+
+    @objc private func openActivityMonitor() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") else {
+            AppLog.ui.error("Activity Monitor not found")
+            return
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
     @objc private func showShelf() {
@@ -114,8 +138,9 @@ final class StatusBarController {
         syncLaunchAtLoginMenuItem()
     }
 
-    private func scheduleIconUpdate(_ state: IconState) {
-        pendingState = state
+    /// `nil` keeps the device state and redraws only the module segments.
+    private func scheduleIconUpdate(_ state: IconState?) {
+        if let state { pendingState = state }
         guard !updateScheduled else { return }
         updateScheduled = true
 
@@ -123,8 +148,9 @@ final class StatusBarController {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.updateScheduled = false
-            guard let state = self.pendingState else { return }
+            guard let state = self.pendingState ?? self.shownState else { return }
             self.pendingState = nil
+            self.shownState = state
             self.updateIcon(state)
         }
     }
@@ -149,17 +175,25 @@ final class StatusBarController {
             ?? makeSymbol("questionmark.circle")
 
         img?.isTemplate = true
-        statusItem.button?.image = img
+        guard let button = statusItem.button else { return }
+        button.image = img
 
+        let segments = modules.compactMap(\.segment)
+        let title = NSMutableAttributedString()
         // Without any image the item would be invisible and its menu (Quit) unreachable.
         if img == nil {
             AppLog.ui.error("No SF Symbol available for the menu bar icon; showing a text title instead")
-            statusItem.button?.imagePosition = .noImage
-            statusItem.button?.title = "MT"
-        } else {
-            statusItem.button?.imagePosition = .imageOnly
-            statusItem.button?.title = ""
+            title.append(NSAttributedString(string: "MT", attributes: [.font: segmentFont]))
         }
+        title.append(MenuBarTitle.attributedTitle(segments, font: segmentFont) { [weak self] name in
+            guard let self else { return nil }
+            let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(self.segmentSymbolConfig)
+            image?.isTemplate = true
+            return image
+        })
+        button.attributedTitle = title
+        button.imagePosition = img == nil ? .noImage : (segments.isEmpty ? .imageOnly : .imageLeading)
+        button.setAccessibilityValue(MenuBarTitle.accessibilityValue(segments))
     }
 
     private func makeFirstAvailableSymbol(_ names: [String]) -> NSImage? {
@@ -184,4 +218,3 @@ final class StatusBarController {
         NSApp.terminate(nil)
     }
 }
-
