@@ -1,7 +1,3 @@
-nonisolated enum ThermalTint: Equatable {
-    case none, warning, critical
-}
-
 nonisolated enum ThermalLevel: Int, CaseIterable, Comparable, Sendable {
     case nominal, moderate, heavy, critical
 
@@ -28,7 +24,7 @@ nonisolated enum ThermalLevel: Int, CaseIterable, Comparable, Sendable {
 
     var isThrottling: Bool { self >= .heavy }
 
-    var tint: ThermalTint {
+    var tint: MenuBarTint {
         switch self {
         case .nominal, .moderate: .none
         case .heavy: .warning
