@@ -12,6 +12,7 @@ nonisolated enum AppLog {
     static let ui = Logger(subsystem: subsystem, category: "ui")
     static let shelf = Logger(subsystem: subsystem, category: "shelf")
     static let memory = Logger(subsystem: subsystem, category: "memory")
+    static let thermal = Logger(subsystem: subsystem, category: "thermal")
     static let updates = Logger(subsystem: subsystem, category: "updates")
 
     /// A quarantined app launched from outside /Applications runs from a temporary
