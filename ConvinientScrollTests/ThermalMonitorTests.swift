@@ -96,15 +96,24 @@ struct ThermalMonitorTests {
         #expect(h.shown.map(\.celsius) == [35, 38])
     }
 
+    @Test func refreshNowDuringAReadReadsAgainAfterIt() {
+        let h = Harness()
+        h.monitor.setEnabled(true)
+        h.monitor.refreshNow()
+        #expect(h.reads == 1)
+
+        h.answer(35)
+        #expect(h.reads == 2)
+        h.answer(35)
+        #expect(h.reads == 2)
+    }
+
     @Test func refreshNowReadsOnceWhenIdle() {
         let h = Harness()
         h.monitor.refreshNow()
         #expect(h.reads == 0)
 
         h.monitor.setEnabled(true)
-        h.monitor.refreshNow()
-        #expect(h.reads == 1)
-
         h.answer(35)
         h.monitor.refreshNow()
         #expect(h.reads == 2)

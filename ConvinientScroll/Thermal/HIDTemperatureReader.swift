@@ -52,6 +52,13 @@ nonisolated final class HIDTemperatureReader: CPUTemperatureSource {
     }
 
     func read() -> Double? {
+        if let celsius = readSelected() { return celsius }
+        guard !hottest.isFullScan else { return nil }
+        hottest.invalidate()
+        return readSelected()
+    }
+
+    private func readSelected() -> Double? {
         let readings = hottest.nextIndices().compactMap { index -> (index: Int, celsius: Double)? in
             guard let event = copyEvent(services[index], Self.temperatureEvent, 0, 0)?.takeRetainedValue() else { return nil }
             return (index, getFloat(event, Self.temperatureField))

@@ -28,6 +28,7 @@ final class ThermalMonitor {
     private var ticker: AnyCancellable?
     private var generation = 0
     private var isReading = false
+    private var refreshQueued = false
     private var needsDisplay = true
     private var alertPolicy = ThrottleAlertPolicy()
     private var shownTemperature = DisplayedTemperature()
@@ -86,7 +87,11 @@ final class ThermalMonitor {
 
     func refreshNow() {
         guard isEnabled, pauseReasons.isEmpty else { return }
-        refresh()
+        if isReading {
+            refreshQueued = true
+        } else {
+            refresh()
+        }
     }
 
     private func resumeIfPossible() {
@@ -99,6 +104,7 @@ final class ThermalMonitor {
         ticker = nil
         generation += 1
         isReading = false
+        refreshQueued = false
         shownTemperature.reset()
     }
 
@@ -117,6 +123,10 @@ final class ThermalMonitor {
         next.celsius = shownTemperature.update(sample.celsius)
         publish(next)
         onUpdate?()
+        if refreshQueued {
+            refreshQueued = false
+            refresh()
+        }
     }
 
     private func publish(_ next: Display) {

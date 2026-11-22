@@ -21,6 +21,10 @@ nonisolated struct HottestSensors {
         return hot
     }
 
+    mutating func invalidate() {
+        hot = []
+    }
+
     mutating func recordFullScan(_ readings: [(index: Int, celsius: Double)]) {
         hot = readings
             .filter { $0.celsius.isFinite && CPUSensors.plausibleRange.contains($0.celsius) }

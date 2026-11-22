@@ -54,7 +54,7 @@ nonisolated final class ThermalSampler {
             fan: {
                 guard let smc else { return nil }
                 let maxima = fanMaxima ?? fanMaximaReading(smc)
-                fanMaxima = maxima
+                if !maxima.isEmpty, !maxima.contains(0) { fanMaxima = maxima }
                 let fans = maxima.enumerated().compactMap { n, max -> (actual: Double, max: Double)? in
                     smc.read("F\(n)Ac").flatMap { SMCDecode.float($0.bytes) }.map { (actual: $0, max: max) }
                 }
