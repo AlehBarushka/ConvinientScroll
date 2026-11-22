@@ -50,6 +50,7 @@ final class AppsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         window?.delegate = nil
         window = nil
+        model?.stop()
         model = nil
     }
 }

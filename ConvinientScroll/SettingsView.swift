@@ -248,7 +248,7 @@ private struct ThermalSettings: View {
 
 private struct AppsSettings: View {
     @EnvironmentObject private var settings: AppSettings
-    @State private var hasFullDiskAccess = FullDiskAccess.isGranted()
+    @State private var hasFullDiskAccess = false
 
     var body: some View {
         Form {
@@ -281,6 +281,7 @@ private struct AppsSettings: View {
                 Text("Mac Toolkit never shows files of Apple apps and never removes settings or data of installed apps. Files go to the Trash.")
             }
         }
+        .onAppear { hasFullDiskAccess = FullDiskAccess.isGranted() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             hasFullDiskAccess = FullDiskAccess.isGranted()
         }

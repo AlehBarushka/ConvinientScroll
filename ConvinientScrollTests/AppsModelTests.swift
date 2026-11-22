@@ -370,4 +370,61 @@ import Testing
         #expect(model.hasFullDiskAccess)
         #expect(model.items.map(\.isAccessible) == [true])
     }
+
+    @Test func cancellingLoadSizesStopsSizeWork() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        for name in ["Alpha", "Bravo", "Charlie"] {
+            try sandbox.installApp(name, id: "com.example.\(name.lowercased())")
+        }
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        var searches = 0
+        var sizing: Task<Void, Never>?
+        sandbox.searchHook.beforeSearch = {
+            searches += 1
+            sizing?.cancel()
+        }
+
+        sizing = Task { await model.loadSizes() }
+        await sizing?.value
+
+        #expect(searches == 1)
+    }
+
+    @Test func stoppedModelIgnoresControllerChanges() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        try sandbox.installApp("Alpha", id: "com.example.alpha")
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        await model.loadSizes()
+        var searches = 0
+        sandbox.searchHook.beforeSearch = { searches += 1 }
+
+        model.stop()
+        try sandbox.installApp("Bravo", id: "com.example.bravo")
+        await controller.refreshInstalled()
+        await model.pendingSync?.value
+        await model.loadSizes()
+
+        #expect(controller.installed.count == 2)
+        #expect(searches == 0)
+    }
+
+    @Test func firstRowIsSelectedWhenRowsAppear() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        try sandbox.installApp("Alpha", id: "com.example.alpha")
+        let controller = sandbox.makeController()
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        #expect(model.rows.isEmpty)
+
+        await controller.setEnabled(true)
+        await model.pendingSync?.value
+
+        #expect(model.selectedID == controller.installed.first?.path)
+    }
 }

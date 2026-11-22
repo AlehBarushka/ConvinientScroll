@@ -4,6 +4,7 @@ import SwiftUI
 struct AppsView: View {
     @ObservedObject var model: AppsModel
     let controller: AppsController
+    @State private var lastConfirmation: [LeftoverItem] = []
 
     var body: some View {
         NavigationSplitView {
@@ -22,7 +23,10 @@ struct AppsView: View {
             }
             await model.loadSizes()
         }
-        .alert(confirmationTitle, isPresented: isConfirming, presenting: model.pendingRemoval) { items in
+        .onChange(of: model.pendingRemoval) { _, items in
+            if let items { lastConfirmation = items }
+        }
+        .alert(confirmationTitle(model.pendingRemoval ?? lastConfirmation), isPresented: isConfirming, presenting: model.pendingRemoval) { items in
             Button("Cancel", role: .cancel) {}
             Button("Move to Trash", role: .destructive) {
                 Task {
@@ -42,12 +46,11 @@ struct AppsView: View {
             set: { if !$0 { model.pendingRemoval = nil } })
     }
 
-    private var confirmationTitle: String {
+    private func confirmationTitle(_ items: [LeftoverItem]) -> String {
         if model.section == .installed {
             let name = controller.app(in: .installed, id: model.selectedID)?.name ?? ""
             return "Clean caches and logs of \(name)?"
         }
-        let items = model.pendingRemoval ?? []
         return "Move \(counted(items.count, "item")) (\(formatted(totalSize(items)))) to the Trash?"
     }
 
@@ -418,7 +421,8 @@ private struct FileRow: View {
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } label: {
-                Image(systemName: "magnifyingglass")
+                Label("Show in Finder", systemImage: "magnifyingglass")
+                    .labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
             .help("Show in Finder")

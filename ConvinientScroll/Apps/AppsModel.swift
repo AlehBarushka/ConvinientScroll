@@ -43,6 +43,7 @@ final class AppsModel: ObservableObject {
     private(set) var pendingLoad: Task<Void, Never>?
     private(set) var pendingSync: Task<Void, Never>?
     private var sizesRequested = false
+    private var isStopped = false
     private struct SizeKey: Hashable {
         var section: AppsSection
         var id: String
@@ -198,13 +199,22 @@ final class AppsModel: ObservableObject {
         }
     }
 
+    func stop() {
+        isStopped = true
+        sizesRequested = false
+        forwarding.removeAll()
+        pendingLoad?.cancel()
+        pendingSync?.cancel()
+    }
+
     func loadSizes() async {
+        guard !isStopped else { return }
         sizesRequested = true
         let current = section
         for entry in allEntries() where sizes[SizeKey(section: current, id: entry.row.id)] == nil {
-            guard section == current else { return }
+            guard section == current, !Task.isCancelled, !isStopped else { return }
             guard let size = await size(of: entry.row.id) else { continue }
-            guard section == current else { return }
+            guard section == current, !Task.isCancelled, !isStopped else { return }
             sizes[SizeKey(section: current, id: entry.row.id)] = size
         }
     }
@@ -224,6 +234,8 @@ final class AppsModel: ObservableObject {
     private func syncWithController() async {
         if let id = selectedID, !allEntries().contains(where: { $0.row.id == id }) {
             await select(rows.first?.id)
+        } else if selectedID == nil, let first = rows.first?.id {
+            await select(first)
         }
         await refreshSizes()
     }
