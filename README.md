@@ -7,6 +7,8 @@ A small menu bar utility for macOS (formerly **ConvinientScroll**) with four mod
 - **Memory** — shows the share of RAM in use in the menu bar, counted as in Activity Monitor.
 - **Temperature** — shows the CPU temperature in the menu bar and warns when macOS throttles the Mac to cool it.
 
+All modules share **one menu bar item** and one menu: the scrolling or shelf icon, then the memory and temperature readings when those modules are on. Hold ⌘ and drag the item to move the whole group along the menu bar.
+
 ---
 
 ## ✨ Features
@@ -39,18 +41,18 @@ Dragging a file into an app on another Space doesn’t work: the drag is lost wh
 
 Off by default; turn it on in **Settings → Memory**.
 
-- A separate menu bar item shows the share of RAM in use, for example **57%**, counted the same way as **Memory Used** in Activity Monitor: app memory, wired and compressed, without file cache.
+- The Mac Toolkit menu bar item gains the share of RAM in use, for example **57%**, counted the same way as **Memory Used** in Activity Monitor: app memory, wired and compressed, without file cache.
+- The number changes only when usage moves by a whole point, so it does not flicker between two values.
 - The number turns **yellow** when macOS reports memory pressure and **red** when it becomes critical.
-- Click it to see the amount in GB and the pressure level, or to open Activity Monitor.
-- Hold ⌘ and drag the item to move it along the menu bar.
+- Click the item to see the amount in GB and the pressure level, or to open Activity Monitor.
 
 ### Temperature
 
 Off by default; turn it on in **Settings → Temperature**.
 
-- A separate menu bar item shows the temperature of the hottest CPU core, for example **58°**, in °C. The item keeps the same width as the digits change.
+- The Mac Toolkit menu bar item gains the temperature of the hottest CPU core, for example **58°**, in °C. The item keeps the same width as the digits change.
 - The number turns **yellow** when macOS reports Heavy thermal pressure (the Mac is throttled) and **red** at Critical.
-- Click it to see the temperature, the fan speed and the pressure level, and how long the Mac has been throttled since the module was turned on, for example **Throttled 1m of 13m**.
+- Click the item to see the temperature, the fan speed and the pressure level, and how long the Mac has been throttled since the module was turned on, for example **Throttled 1m of 13m**.
 - A notification arrives when the Mac starts throttling: Heavy at most once every 10 minutes, Critical every time. It can be turned off in the same settings section.
 - Works on Apple silicon (M1 and later). On Intel Macs the item shows **—°** and the pressure level only.
 
@@ -156,8 +158,10 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
   - Detection is based on HID properties and the device `product` string, so some devices may require additional heuristics
 - **The shelf doesn’t appear**
   - Check that **File Shelf** is on in Settings; an empty shelf is invisible until a file is dragged close
-- **The memory item is missing**
-  - Check that **Memory** is on in Settings; on a crowded menu bar the item can be hidden behind the notch, so ⌘-drag it closer to the clock
+- **The menu bar item is missing**
+  - On a crowded menu bar it can be hidden behind the notch; ⌘-drag it closer to the clock
+- **The memory or temperature reading is missing**
+  - Check that **Memory** or **Temperature** is on in Settings
 - **The temperature shows —°**
   - The Mac exposes no CPU temperature sensor the module recognises (for example an Intel Mac). The log lists which sensors were found: `log show --last 1h --info --predicate 'subsystem == "com.alehbarushka.convinientscroll" AND category == "thermal"'`
 
