@@ -202,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
+    var onOpenLeftovers: ((String) -> Void)?
     private var didRequest = false
 
     override init() {
@@ -260,6 +261,33 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             if let error {
                 AppLog.thermal.error("Cannot deliver notification: \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    func showLeftovers(bundleID: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.userInfo = ["bundleID": bundleID]
+
+        let request = UNNotificationRequest(identifier: "apps-leftovers-\(bundleID)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                AppLog.apps.error("Cannot deliver notification: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let bundleID = response.notification.request.content.userInfo["bundleID"] as? String
+        completionHandler()
+        guard let bundleID else { return }
+        Task { @MainActor in
+            self.onOpenLeftovers?(bundleID)
         }
     }
 
