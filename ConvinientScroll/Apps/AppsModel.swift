@@ -67,7 +67,7 @@ final class AppsModel: ObservableObject {
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &forwarding)
         controller.$installed.dropFirst()
-            .sink { [weak self] _ in self?.scheduleSync() }
+            .sink { [weak self] _ in self?.scheduleSync(installedChanged: true) }
             .store(in: &forwarding)
         controller.$removed.dropFirst()
             .sink { [weak self] _ in self?.scheduleSync() }
@@ -237,21 +237,22 @@ final class AppsModel: ObservableObject {
         if sizesRequested { await loadSizes() }
     }
 
-    private func scheduleSync() {
+    private func scheduleSync(installedChanged: Bool = false) {
         let previous = pendingSync
         pendingSync = Task {
             await previous?.value
-            await self.syncWithController()
+            await self.syncWithController(installedChanged: installedChanged)
         }
     }
 
-    private func syncWithController() async {
+    private func syncWithController(installedChanged: Bool) async {
         let selectedGroupChanged = pruneOrphans()
+        let reloadsRemoved = installedChanged && section == .removed
         if let id = selectedID, !allEntries().contains(where: { $0.row.id == id }) {
             await select(rows.first?.id)
         } else if selectedID == nil, let first = rows.first?.id {
             await select(first)
-        } else if selectedGroupChanged {
+        } else if selectedGroupChanged || reloadsRemoved {
             await select(selectedID)
         }
         await refreshSizes()

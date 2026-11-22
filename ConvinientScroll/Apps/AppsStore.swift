@@ -22,7 +22,8 @@ nonisolated struct AppsStore: Sendable {
         read([InstalledApp].self, from: indexURL)
     }
 
-    func saveIndex(_ apps: [InstalledApp]) {
+    @discardableResult
+    func saveIndex(_ apps: [InstalledApp]) -> Bool {
         write(apps, to: indexURL)
     }
 
@@ -31,7 +32,7 @@ nonisolated struct AppsStore: Sendable {
     }
 
     func saveRemoved(_ removed: [RemovedApp]) {
-        write(removed, to: removedURL)
+        _ = write(removed, to: removedURL)
     }
 
     private var indexURL: URL { root.appending(path: "index.json") }
@@ -47,12 +48,14 @@ nonisolated struct AppsStore: Sendable {
         }
     }
 
-    private func write<T: Encodable>(_ value: T, to url: URL) {
+    private func write<T: Encodable>(_ value: T, to url: URL) -> Bool {
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try JSONEncoder().encode(value).write(to: url, options: .atomic)
+            return true
         } catch {
             AppLog.apps.error("Cannot write \(url.lastPathComponent, privacy: .public) at \(url.path, privacy: .private): \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 }

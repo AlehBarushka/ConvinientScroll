@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 
 protocol FolderWatching: AnyObject {
-    func start(_ folders: [URL], onChange: @escaping () -> Void)
+    func start(_ folders: [URL], onChange: @escaping ([String]) -> Void)
     func stop()
 }
 
@@ -11,9 +11,9 @@ final class ApplicationsWatcher: FolderWatching {
     static let latency: CFTimeInterval = 2
 
     private var stream: FSEventStreamRef?
-    private var onChange: (() -> Void)?
+    private var onChange: (([String]) -> Void)?
 
-    func start(_ folders: [URL], onChange: @escaping () -> Void) {
+    func start(_ folders: [URL], onChange: @escaping ([String]) -> Void) {
         stop()
         let paths = folders.map(\.path).filter { path in
             var isDirectory: ObjCBool = false
@@ -26,9 +26,8 @@ final class ApplicationsWatcher: FolderWatching {
         let callback: FSEventStreamCallback = { _, info, _, eventPaths, _, _ in
             guard let info else { return }
             let paths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as? [String] ?? []
-            guard ApplicationsWatcher.canChangeAppList(paths) else { return }
             let watcher = Unmanaged<ApplicationsWatcher>.fromOpaque(info).takeUnretainedValue()
-            MainActor.assumeIsolated { watcher.onChange?() }
+            MainActor.assumeIsolated { watcher.onChange?(paths) }
         }
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault, callback, &context, paths as CFArray,
@@ -49,8 +48,12 @@ final class ApplicationsWatcher: FolderWatching {
         self.onChange = onChange
     }
 
-    nonisolated static func canChangeAppList(_ paths: [String]) -> Bool {
-        paths.isEmpty || paths.contains { $0.range(of: ".app/", options: .caseInsensitive) == nil }
+    nonisolated static func canChangeAppList(_ paths: [String], installed: Set<String>) -> Bool {
+        paths.isEmpty || paths.contains { path in
+            guard let bundleEnd = path.range(of: ".app/", options: .caseInsensitive)?.lowerBound else { return true }
+            let bundle = path[..<path.index(bundleEnd, offsetBy: ".app".count)]
+            return !installed.contains(String(bundle))
+        }
     }
 
     func stop() {

@@ -5,18 +5,18 @@ import Testing
 
 @MainActor final class FakeWatcher: FolderWatching {
     private(set) var folders: [URL]?
-    var onChange: (() -> Void)?
+    var onChange: (([String]) -> Void)?
 
     var isWatching: Bool { onChange != nil }
 
-    func start(_ folders: [URL], onChange: @escaping () -> Void) {
+    func start(_ folders: [URL], onChange: @escaping ([String]) -> Void) {
         self.folders = folders
         self.onChange = onChange
     }
 
     func stop() { onChange = nil }
 
-    func fire() { onChange?() }
+    func fire(_ paths: [String] = []) { onChange?(paths) }
 }
 
 @MainActor final class AppsScheduler {
@@ -123,8 +123,8 @@ struct Notice: Equatable {
     }
 
     @discardableResult
-    func installApp(_ name: String, id: String) throws -> URL {
-        let bundle = apps.appending(path: "\(name).app", directoryHint: .isDirectory)
+    func installApp(_ name: String, id: String, fileName: String? = nil) throws -> URL {
+        let bundle = apps.appending(path: "\(fileName ?? name).app", directoryHint: .isDirectory)
         let contents = bundle.appending(path: "Contents", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
         let plist: [String: Any] = ["CFBundleIdentifier": id, "CFBundleName": name]

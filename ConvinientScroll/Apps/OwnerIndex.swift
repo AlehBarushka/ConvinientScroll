@@ -30,6 +30,10 @@ nonisolated struct OwnerIndex: Sendable {
         return !bundleIDOwners(of: id.lowercased()).isEmpty
     }
 
+    func ownsByName(_ entry: LibraryEntry) -> Bool {
+        entry.folder.allowsNameMatch && !nameOwners(entry.name.lowercased()).isEmpty
+    }
+
     func bundleIDOwners(of lowerName: String) -> Set<String> {
         var result = owners(in: byID, prefixesOf: lowerName, includingWhole: true)
         if lowerName.hasPrefix("group.") {

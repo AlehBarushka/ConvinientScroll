@@ -293,12 +293,71 @@ import Testing
         #expect(sandbox.store.loadIndex()?.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
     }
 
-    @Test func eventsInsideAppBundlesCannotChangeTheList() {
-        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/"]))
-        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app/Contents/", "/Applications/Utilities/"]))
-        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app"]))
-        #expect(ApplicationsWatcher.canChangeAppList([]))
-        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app/", "/Applications/Notes.APP/Contents/Resources/"]) == false)
+    @Test func eventsInsideInstalledBundlesCannotChangeTheList() {
+        let installed: Set = ["/Applications/Chatter.app", "/Applications/Utilities/Notes.APP"]
+        func check(_ paths: [String]) -> Bool { ApplicationsWatcher.canChangeAppList(paths, installed: installed) }
+        #expect(check(["/Applications/"]))
+        #expect(check(["/Applications/Chatter.app/Contents/", "/Applications/Utilities/"]))
+        #expect(check(["/Applications/Chatter.app"]))
+        #expect(check([]))
+        #expect(check(["/Applications/Chatter.app/", "/Applications/Utilities/Notes.APP/Contents/Resources/"]) == false)
+        #expect(check(["/Applications/Chatter.app/Contents/Helpers/Agent.app/Contents/"]) == false)
+        #expect(check(["/Applications/Chatter.app/Contents/", "/Applications/Copying.app/Contents/"]))
+        #expect(check(["/Applications/Copying.app/Contents/Info.plist"]))
+    }
+
+    @Test func eventInsideANewBundleRescans() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        try sandbox.installApp("Chatter", id: "com.example.chatter")
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let chatter = try #require(controller.installed.first).path
+        let folder = (chatter as NSString).deletingLastPathComponent
+        try sandbox.installApp("Notes", id: "com.example.notes")
+
+        sandbox.watcher.fire(["\(chatter)/Contents/"])
+        await controller.pendingWork?.value
+        #expect(controller.installed.map(\.bundleID) == ["com.example.chatter"])
+
+        sandbox.watcher.fire(["\(folder)/Notes.app/Contents/"])
+        await controller.pendingWork?.value
+        #expect(controller.installed.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
+    }
+
+    @Test func failedIndexWriteIsRetried() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        try sandbox.installApp("Chatter", id: "com.example.chatter")
+        try sandbox.writeFile(sandbox.store.root, bytes: 1)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        #expect(sandbox.store.loadIndex() == nil)
+
+        try FileManager.default.removeItem(at: sandbox.store.root)
+        await controller.refreshInstalled()
+
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
+    }
+
+    @Test func removalSkipsDataNamedLikeAnInstalledApp() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([])
+        let chatter = sandbox.indexedApp("Chatter", id: "com.example.chatter")
+        sandbox.store.saveRemoved([RemovedApp(app: chatter, removedAt: Date(timeIntervalSince1970: 0))])
+        let support = sandbox.user.appending(path: "Application Support/Chatter")
+        try sandbox.writeFile(support.appending(path: "state.db"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let item = try #require(await controller.leftovers(for: chatter).first { $0.match == .name })
+
+        try sandbox.installApp("Chatter", id: "com.example.other", fileName: "Chatter Two")
+        await controller.refreshInstalled()
+        let report = await controller.remove([item])
+
+        #expect(report.removed.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: support.path))
     }
 
     @Test func emptyScanWhileAppsAreKnownIsAFailure() async throws {

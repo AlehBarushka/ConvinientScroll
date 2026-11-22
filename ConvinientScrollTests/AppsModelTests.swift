@@ -482,6 +482,30 @@ import Testing
         #expect(model.lastReport == nil)
     }
 
+    @Test func removedSelectionReloadsWhenAnAppIsInstalled() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        _ = try removedChatter(sandbox)
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        try sandbox.writeFile(sandbox.user.appending(path: "Application Support/Chatter/state.db"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        model.section = .removed
+        await model.select("com.example.chatter")
+        #expect(model.items.count == 2)
+        model.checked = Set(model.items.map(\.id))
+        model.askToTrashChecked()
+
+        try sandbox.installApp("Chatter", id: "com.example.other", fileName: "Chatter Two")
+        await controller.refreshInstalled()
+        await model.pendingSync?.value
+
+        #expect(model.selectedID == "com.example.chatter")
+        #expect(model.items.map(\.entry.name) == ["com.example.chatter.plist"])
+        #expect(model.pendingRemoval == nil)
+    }
+
     @Test func pendingRemovalIsDroppedWhenTheSectionChanges() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }

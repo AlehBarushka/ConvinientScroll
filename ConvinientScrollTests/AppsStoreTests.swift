@@ -38,6 +38,17 @@ struct AppsStoreTests {
         #expect(store.loadIndex() == apps)
     }
 
+    @Test func saveIndexReportsAFailedWrite() throws {
+        let sandbox = Sandbox()
+        let apps = [Self.app("com.example.alpha", name: "Alpha")]
+        try Data().write(to: sandbox.root)
+
+        #expect(AppsStore(root: sandbox.root).saveIndex(apps) == false)
+
+        try FileManager.default.removeItem(at: sandbox.root)
+        #expect(AppsStore(root: sandbox.root).saveIndex(apps))
+    }
+
     @Test func missingIndexIsNil() {
         let sandbox = Sandbox()
 

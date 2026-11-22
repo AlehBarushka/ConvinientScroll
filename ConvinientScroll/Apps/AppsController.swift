@@ -113,7 +113,9 @@ final class AppsController: ObservableObject {
     func remove(_ items: [LeftoverItem]) async -> RemovalReport {
         let removal = environment.removal
         let owners = owners
-        let allowed = items.filter { $0.kind == .cache || $0.kind == .log || !owners.owns($0.entry) }
+        let allowed = items.filter { item in
+            item.kind == .cache || item.kind == .log || !(owners.owns(item.entry) || owners.ownsByName(item.entry))
+        }
         if allowed.count < items.count {
             AppLog.apps.notice("Skipped \(items.count - allowed.count) items that belong to an installed app")
         }
@@ -189,10 +191,10 @@ final class AppsController: ObservableObject {
         let store = environment.store
         let apps = installed + (tracker?.pendingApps ?? [])
         guard apps != savedIndex else { return }
-        savedIndex = apps
-        await Task.detached(priority: .utility) {
+        let saved = await Task.detached(priority: .utility) {
             store.saveIndex(apps)
         }.value
+        if saved { savedIndex = apps }
     }
 
     private func publish(_ current: [InstalledApp]) {
@@ -221,8 +223,8 @@ final class AppsController: ObservableObject {
             guard let self else { return }
             self.enqueue { await self.handleRemoval(of: app) }
         }
-        environment.watcher.start(environment.scanner.roots) { [weak self] in
-            guard let self else { return }
+        environment.watcher.start(environment.scanner.roots) { [weak self] paths in
+            guard let self, ApplicationsWatcher.canChangeAppList(paths, installed: Set(self.installed.map(\.path))) else { return }
             self.enqueue { await self.rescan() }
         }
     }
