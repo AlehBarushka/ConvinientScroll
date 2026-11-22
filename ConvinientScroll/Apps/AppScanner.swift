@@ -53,7 +53,7 @@ nonisolated struct AppScanner: Sendable {
     static func read(appAt url: URL, teamID: (URL) -> String?) -> InstalledApp? {
         let plistURL = url.appending(path: "Contents/Info.plist")
         guard let info = NSDictionary(contentsOf: plistURL) as? [String: Any],
-              let bundleID = info["CFBundleIdentifier"] as? String,
+              let bundleID = info["CFBundleIdentifier"] as? String, !bundleID.isEmpty,
               let modified = plistModified(of: url)
         else { return nil }
         let fileName = url.deletingPathExtension().lastPathComponent
@@ -63,7 +63,7 @@ nonisolated struct AppScanner: Sendable {
             name: (info["CFBundleDisplayName"] as? String) ?? (info["CFBundleName"] as? String) ?? fileName,
             executable: info["CFBundleExecutable"] as? String,
             version: (info["CFBundleShortVersionString"] as? String) ?? (info["CFBundleVersion"] as? String),
-            teamID: teamID(url),
+            teamID: teamID(url).flatMap { $0.isEmpty ? nil : $0 },
             nestedBundleIDs: nestedIDs(in: url, excluding: bundleID),
             infoPlistModified: modified
         )
@@ -91,7 +91,7 @@ nonisolated struct AppScanner: Sendable {
                 guard nestedExtensions.contains(url.pathExtension) else { continue }
                 enumerator.skipDescendants()
                 let info = NSDictionary(contentsOf: url.appending(path: "Contents/Info.plist")) as? [String: Any]
-                if let id = info?["CFBundleIdentifier"] as? String { ids.insert(id) }
+                if let id = info?["CFBundleIdentifier"] as? String, !id.isEmpty { ids.insert(id) }
             }
         }
         let launchServices = contents.appending(path: "Library/LaunchServices", directoryHint: .isDirectory)

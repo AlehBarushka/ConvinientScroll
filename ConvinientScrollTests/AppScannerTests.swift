@@ -85,6 +85,20 @@ private final class CallCounter: @unchecked Sendable {
         #expect(scan().map(\.bundleID) == ["com.example.b"])
     }
 
+    @Test func emptyIdentifiersAreDropped() throws {
+        defer { cleanUp() }
+        try makeBundle("Empty.app", plist: ["CFBundleIdentifier": ""])
+        try makeBundle("A.app", plist: ["CFBundleIdentifier": "com.example.a"])
+        try makeBundle("A.app/Contents/PlugIns/W.appex", plist: ["CFBundleIdentifier": ""])
+        try makeBundle("A.app/Contents/PlugIns/V.appex", plist: ["CFBundleIdentifier": "com.example.a.v"])
+
+        let apps = scan(teamID: { _ in "" })
+
+        #expect(apps.map(\.bundleID) == ["com.example.a"])
+        #expect(apps.first?.nestedBundleIDs == ["com.example.a.v"])
+        #expect(apps.first?.teamID == nil)
+    }
+
     @Test func reusesUnchangedEntries() throws {
         defer { cleanUp() }
         try makeBundle("A.app", plist: ["CFBundleIdentifier": "com.example.a"])
