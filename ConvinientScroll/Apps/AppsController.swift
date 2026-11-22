@@ -135,29 +135,34 @@ final class AppsController: ObservableObject {
         let scanner = environment.scanner
         let (savedRemoved, index, current) = await Task.detached(priority: .utility) {
             let index = store.loadIndex()
-            let current = scanner.scan(reusing: index ?? [])
-            store.saveIndex(current)
-            return (store.loadRemoved(), index, current)
+            return (store.loadRemoved(), index, scanner.scan(reusing: index ?? []))
         }.value
         guard isEnabled else { return }
         removed = savedRemoved
         publish(current)
         startWatching(known: index ?? current)
         tracker?.update(current: current)
+        await saveIndex()
     }
 
     private func rescan() async {
-        let store = environment.store
         let scanner = environment.scanner
         let previous = installed
         let current = await Task.detached(priority: .utility) {
-            let current = scanner.scan(reusing: previous)
-            store.saveIndex(current)
-            return current
+            scanner.scan(reusing: previous)
         }.value
         guard isEnabled else { return }
         publish(current)
         tracker?.update(current: current)
+        await saveIndex()
+    }
+
+    private func saveIndex() async {
+        let store = environment.store
+        let apps = installed + (tracker?.pendingApps ?? [])
+        await Task.detached(priority: .utility) {
+            store.saveIndex(apps)
+        }.value
     }
 
     private func publish(_ current: [InstalledApp]) {
@@ -171,7 +176,15 @@ final class AppsController: ObservableObject {
 
     private func startWatching(known: [InstalledApp]) {
         guard isEnabled, watchEnabled, tracker == nil else { return }
-        tracker = RemovalTracker(known: known, schedule: environment.schedule) { [weak self] app in
+        let schedule = environment.schedule
+        let checkThenSave: RemovalTracker.Schedule = { [weak self] delay, action in
+            schedule(delay) {
+                action()
+                guard let self else { return }
+                self.enqueue { await self.saveIndex() }
+            }
+        }
+        tracker = RemovalTracker(known: known, schedule: checkThenSave) { [weak self] app in
             guard let self else { return }
             self.enqueue { await self.handleRemoval(of: app) }
         }
@@ -183,19 +196,28 @@ final class AppsController: ObservableObject {
 
     private func stopWatching() {
         environment.watcher.stop()
+        let hadCandidates = !(tracker?.pendingApps.isEmpty ?? true)
         tracker?.cancelAll()
         tracker = nil
+        if hadCandidates {
+            enqueue { await self.saveIndex() }
+        }
     }
 
     private func handleRemoval(of app: InstalledApp) async {
-        guard isEnabled, watchEnabled, !removed.contains(where: { $0.id == app.bundleID }) else { return }
+        guard isEnabled, watchEnabled,
+              !installed.contains(where: { $0.bundleID == app.bundleID }),
+              !removed.contains(where: { $0.id == app.bundleID })
+        else { return }
         removed.append(RemovedApp(app: app, removedAt: environment.now()))
         environment.store.saveRemoved(removed)
         let items = await leftovers(for: app)
+        guard removed.contains(where: { $0.id == app.bundleID }) else { return }
         guard !items.isEmpty else {
             drop(app.bundleID)
             return
         }
+        guard isEnabled, watchEnabled else { return }
         let bytes = items.compactMap(\.size).reduce(0, +)
         environment.notify(
             app.bundleID,

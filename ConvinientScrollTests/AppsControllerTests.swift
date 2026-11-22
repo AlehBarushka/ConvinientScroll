@@ -53,11 +53,16 @@ private struct Notice: Equatable {
     var calls: [Notice] = []
 }
 
+@MainActor private final class SearchHook {
+    var beforeSearch: (() -> Void)?
+}
+
 @MainActor private struct Sandbox {
     let root = FileManager.default.temporaryDirectory.appending(path: "AppsControllerTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     let watcher = FakeWatcher()
     let scheduler = ManualScheduler()
     let notices = Notices()
+    let searchHook = SearchHook()
 
     var apps: URL { root.appending(path: "Applications", directoryHint: .isDirectory) }
     var user: URL { root.appending(path: "User", directoryHint: .isDirectory) }
@@ -73,11 +78,14 @@ private struct Notice: Equatable {
     func cleanUp() { try? FileManager.default.removeItem(at: root) }
 
     func makeController() -> AppsController {
-        let user = user, system = system, notices = notices
+        let user = user, system = system, notices = notices, searchHook = searchHook
         return AppsController(environment: AppsEnvironment(
             store: store,
             scanner: AppScanner(roots: [apps], teamID: { _ in nil }),
-            library: { LibraryScanner(userLibrary: user, systemLibrary: system, canReadProtected: $0) },
+            library: {
+                searchHook.beforeSearch?()
+                return LibraryScanner(userLibrary: user, systemLibrary: system, canReadProtected: $0)
+            },
             watcher: watcher,
             schedule: scheduler.schedule,
             notify: { notices.calls.append(Notice(bundleID: $0, title: $1, body: $2)) },
@@ -168,11 +176,12 @@ private struct Notice: Equatable {
         sandbox.watcher.fire()
         await controller.pendingWork?.value
         #expect(controller.installed.isEmpty)
-        #expect(sandbox.store.loadIndex()?.isEmpty == true)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
         #expect(sandbox.scheduler.checks.count == 1)
         sandbox.scheduler.runPending()
         await controller.pendingWork?.value
 
+        #expect(sandbox.store.loadIndex()?.isEmpty == true)
         #expect(sandbox.notices.calls.isEmpty)
         #expect(controller.removed.isEmpty)
         #expect(sandbox.store.loadRemoved().isEmpty)
@@ -208,9 +217,61 @@ private struct Notice: Equatable {
         let check = try #require(sandbox.scheduler.checks.first)
 
         controller.watchEnabled = false
+        await controller.pendingWork?.value
 
         #expect(check.cancelled)
         #expect(sandbox.watcher.isWatching == false)
+        #expect(sandbox.store.loadIndex()?.isEmpty == true)
+    }
+
+    @Test func watchTurnedOffDuringTheSearchDoesNotNotify() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        sandbox.searchHook.beforeSearch = { controller.watchEnabled = false }
+
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(sandbox.notices.calls.isEmpty)
+    }
+
+    @Test func reinstalledBeforeTheRemovalIsHandledIsNotRecorded() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        try sandbox.installApp("Chatter", id: "com.example.chatter")
+        var shown: [[String]] = []
+        let subscription = controller.$removed.sink { shown.append($0.map(\.id)) }
+        defer { subscription.cancel() }
+
+        sandbox.watcher.fire()
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(controller.installed.map(\.bundleID) == ["com.example.chatter"])
+        #expect(shown.allSatisfy { $0.isEmpty })
+        #expect(sandbox.notices.calls.isEmpty)
+    }
+
+    @Test func pendingCandidatesStayInTheSavedIndex() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        let controller = sandbox.makeController()
+
+        await controller.setEnabled(true)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
+
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+        #expect(sandbox.store.loadIndex()?.isEmpty == true)
     }
 
     @Test func turningWatchOnIgnoresAppsRemovedWhileOff() async throws {

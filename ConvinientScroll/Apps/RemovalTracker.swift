@@ -8,7 +8,7 @@ final class RemovalTracker {
     static let confirmationDelay: TimeInterval = 30
 
     private(set) var known: [InstalledApp]
-    private var pending: [String: AnyCancellable] = [:]
+    private var pending: [String: (app: InstalledApp, check: AnyCancellable)] = [:]
     private let schedule: Schedule
     private let onRemoved: (InstalledApp) -> Void
 
@@ -18,21 +18,25 @@ final class RemovalTracker {
         self.onRemoved = onRemoved
     }
 
+    var pendingApps: [InstalledApp] {
+        pending.values.map(\.app).sorted { $0.path < $1.path }
+    }
+
     func update(current: [InstalledApp]) {
         let currentPaths = Set(current.map(\.path))
         for path in pending.keys.filter(currentPaths.contains) {
-            pending.removeValue(forKey: path)?.cancel()
+            pending.removeValue(forKey: path)?.check.cancel()
         }
         for app in known where !currentPaths.contains(app.path) {
-            pending[app.path] = schedule(Self.confirmationDelay) { [weak self] in
+            pending[app.path] = (app, schedule(Self.confirmationDelay) { [weak self] in
                 self?.confirm(app)
-            }
+            })
         }
         known = current
     }
 
     func cancelAll() {
-        pending.values.forEach { $0.cancel() }
+        pending.values.forEach { $0.check.cancel() }
         pending.removeAll()
     }
 

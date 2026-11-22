@@ -118,5 +118,16 @@ private func app(_ path: String, id: String = "com.example.chatter", version: St
         tracker.update(current: [])
         tracker.cancelAll()
         #expect(scheduler.checks[0].cancelled)
+        #expect(tracker.pendingApps.isEmpty)
+    }
+
+    @Test func pendingAppsListCandidatesUntilTheirCheckRuns() {
+        let (tracker, scheduler, _) = make(known: [chatter, editor])
+        tracker.update(current: [])
+        #expect(tracker.pendingApps == [chatter, editor])
+        tracker.update(current: [editor])
+        #expect(tracker.pendingApps == [chatter])
+        scheduler.checks[0].action()
+        #expect(tracker.pendingApps.isEmpty)
     }
 }
