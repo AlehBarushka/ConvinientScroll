@@ -43,6 +43,8 @@ final class AppServices {
     private var shelf: ShelfController?
     private var memory: MemoryController?
     private var thermal: ThermalController?
+    private var apps: AppsController?
+    private var appsWindow: AppsWindowController?
     private var settingsWindow: SettingsWindowController?
     private var updateWindow: UpdateWindowController?
     private var cancellables = Set<AnyCancellable>()
@@ -67,6 +69,7 @@ final class AppServices {
         startShelf()
         startMemory()
         startThermal()
+        startApps()
         reportPreviousUpdate()
 
         if statusBar == nil {
@@ -76,6 +79,7 @@ final class AppServices {
                 settings: settings,
                 modules: [memory as MenuBarModule?, thermal].compactMap { $0 },
                 onShowShelf: { [weak self] in self?.shelf?.showShelf() },
+                onOpenApps: { [weak self] in self?.openApps() },
                 onOpenSettings: { [weak self] in self?.openSettings() },
                 onCheckForUpdates: { [weak self] in self?.checkForUpdates() }
             )
@@ -123,6 +127,32 @@ final class AppServices {
             .removeDuplicates()
             .sink { controller.setEnabled($0) }
             .store(in: &cancellables)
+    }
+
+    private func startApps() {
+        guard apps == nil else { return }
+        let controller = AppsController(environment: .live())
+        apps = controller
+        NotificationService.shared.onOpenLeftovers = { [weak self] in self?.openApps(focus: $0) }
+        settings.$appsWatchEnabled
+            .removeDuplicates()
+            .sink { controller.watchEnabled = $0 }
+            .store(in: &cancellables)
+        settings.$appsEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                if !enabled { self?.appsWindow?.close() }
+                Task { await controller.setEnabled(enabled) }
+            }
+            .store(in: &cancellables)
+    }
+
+    func openApps(focus: String? = nil) {
+        guard let apps, settings.appsEnabled else { return }
+        if appsWindow == nil {
+            appsWindow = AppsWindowController(controller: apps, settings: settings)
+        }
+        appsWindow?.show(focus: focus)
     }
 
     private func reportPreviousUpdate() {

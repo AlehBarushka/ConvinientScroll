@@ -10,7 +10,7 @@ import AppKit
 
 struct SettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case general, scroll, shelf, memory, thermal
+        case general, scroll, shelf, memory, thermal, apps
 
         var id: String { rawValue }
 
@@ -21,6 +21,7 @@ struct SettingsView: View {
             case .shelf: "File Shelf"
             case .memory: "Memory"
             case .thermal: "Temperature"
+            case .apps: "Apps"
             }
         }
 
@@ -31,6 +32,7 @@ struct SettingsView: View {
             case .shelf: "tray.full"
             case .memory: "memorychip"
             case .thermal: "thermometer.medium"
+            case .apps: "square.grid.2x2"
             }
         }
     }
@@ -52,6 +54,7 @@ struct SettingsView: View {
                 case .shelf: ShelfSettings()
                 case .memory: MemorySettings()
                 case .thermal: ThermalSettings()
+                case .apps: AppsSettings()
                 }
             }
             .formStyle(.grouped)
@@ -239,6 +242,47 @@ private struct ThermalSettings: View {
             } footer: {
                 Text("Shows the hottest CPU sensor. It updates every 2 seconds and pauses while the display is off. The number turns yellow or red when macOS slows the Mac down to cool it.")
             }
+        }
+    }
+}
+
+private struct AppsSettings: View {
+    @EnvironmentObject private var settings: AppSettings
+    @State private var hasFullDiskAccess = FullDiskAccess.isGranted()
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Show Apps & Leftovers in the menu", isOn: $settings.appsEnabled)
+                Toggle("Notify about files left by removed apps", isOn: $settings.appsWatchEnabled)
+                    .disabled(!settings.appsEnabled)
+                LabeledContent("Full Disk Access") {
+                    if hasFullDiskAccess {
+                        Text("Allowed").foregroundStyle(.secondary)
+                    } else {
+                        Button("Open System Settings") { NSWorkspace.shared.open(FullDiskAccess.settingsURL) }
+                    }
+                }
+            }
+
+            Section {
+                if settings.appsHiddenIDs.isEmpty {
+                    Text("Nothing hidden. Use Hide Forever in Orphans to stop showing files you want to keep.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(settings.appsHiddenIDs, id: \.self) { id in
+                    LabeledContent(id) {
+                        Button("Unhide") { settings.appsHiddenIDs.removeAll { $0 == id } }
+                    }
+                }
+            } header: {
+                Text("Hidden items")
+            } footer: {
+                Text("Mac Toolkit never shows files of Apple apps and never removes settings or data of installed apps. Files go to the Trash.")
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            hasFullDiskAccess = FullDiskAccess.isGranted()
         }
     }
 }

@@ -16,6 +16,7 @@ final class StatusBarController {
     private weak var launchAtLogin: LaunchAtLoginManager?
     private var launchAtLoginMenuItem: NSMenuItem?
     private let onShowShelf: () -> Void
+    private let onOpenApps: () -> Void
     private let onOpenSettings: () -> Void
     private let onCheckForUpdates: () -> Void
 
@@ -25,12 +26,14 @@ final class StatusBarController {
         settings: AppSettings,
         modules: [MenuBarModule],
         onShowShelf: @escaping () -> Void,
+        onOpenApps: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void
     ) {
         self.launchAtLogin = launchAtLogin
         self.modules = modules
         self.onShowShelf = onShowShelf
+        self.onOpenApps = onOpenApps
         self.onOpenSettings = onOpenSettings
         self.onCheckForUpdates = onCheckForUpdates
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -45,6 +48,10 @@ final class StatusBarController {
         shelfItem.target = self
         shelfItem.image = makeSymbol("tray.full")
         baseItems.append(shelfItem)
+        let appsItem = NSMenuItem(title: "Apps…", action: #selector(openApps), keyEquivalent: "")
+        appsItem.target = self
+        appsItem.image = makeSymbol("square.grid.2x2")
+        baseItems.append(appsItem)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         baseItems.append(settingsItem)
@@ -71,6 +78,11 @@ final class StatusBarController {
         settings.$shelfEnabled
             .receive(on: RunLoop.main)
             .sink { shelfItem.isHidden = !$0 }
+            .store(in: &cancellables)
+
+        settings.$appsEnabled
+            .receive(on: RunLoop.main)
+            .sink { appsItem.isHidden = !$0 }
             .store(in: &cancellables)
 
         launchAtLogin.$isEnabled
@@ -117,6 +129,10 @@ final class StatusBarController {
 
     @objc private func showShelf() {
         onShowShelf()
+    }
+
+    @objc private func openApps() {
+        onOpenApps()
     }
 
     @objc private func openSettings() {
