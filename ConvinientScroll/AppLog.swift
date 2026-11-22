@@ -14,6 +14,7 @@ nonisolated enum AppLog {
     static let memory = Logger(subsystem: subsystem, category: "memory")
     static let thermal = Logger(subsystem: subsystem, category: "thermal")
     static let updates = Logger(subsystem: subsystem, category: "updates")
+    static let apps = Logger(subsystem: subsystem, category: "apps")
 
     /// A quarantined app launched from outside /Applications runs from a temporary
     /// read-only copy; if macOS unmounts it the process dies with SIGBUS.
