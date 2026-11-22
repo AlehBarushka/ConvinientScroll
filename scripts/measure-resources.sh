@@ -5,7 +5,7 @@
 # and a run is discarded if the display still turned off or the Mac slept, since both pause the
 # app's timers.
 #
-#   ./scripts/measure-resources.sh -n "thermal on, menu closed" [-d 120]
+#   ./scripts/app-lock.sh run "<session>: <what>" -- ./scripts/measure-resources.sh -n "thermal on, menu closed" [-d 120]
 set -euo pipefail
 
 APP_NAME="MacToolkit"
@@ -27,6 +27,8 @@ while getopts "n:d:" opt; do
 done
 [[ -n "$NOTE" ]] || usage
 [[ "$DURATION" =~ ^[1-9][0-9]*$ && "$DURATION" -ge 10 ]] || fail "duration must be at least 10 seconds"
+[[ -n "${MACTOOLKIT_APP_LOCK:-}" && -d "$MACTOOLKIT_APP_LOCK" ]] \
+  || fail "run it under scripts/app-lock.sh, or another session's xcodebuild test can quit the app mid-measurement"
 
 PIDS=($(pgrep -x "$APP_NAME" || true))
 [[ ${#PIDS[@]} -eq 1 ]] || fail "expected exactly one running $APP_NAME, found ${#PIDS[@]}"
