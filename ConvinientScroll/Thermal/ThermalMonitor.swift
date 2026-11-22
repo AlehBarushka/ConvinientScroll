@@ -139,13 +139,13 @@ final class ThermalMonitor {
 
 extension ThermalMonitor.Display {
     var segment: MenuBarSegment {
-        let text = ThermalText.menuBar(celsius: celsius)
+        let pressureText = "thermal pressure \(level?.title.lowercased() ?? "unknown")"
         return MenuBarSegment(
             symbol: "thermometer.medium",
-            text: text,
+            text: celsius.map { ThermalText.menuBar(celsius: $0) } ?? "\(MenuBarTitle.figureDash)°",
             reservedCharacters: 4,
             tint: level?.tint ?? MenuBarTint.none,
-            accessibility: "CPU \(text), thermal pressure \(level?.title.lowercased() ?? "unknown")"
+            accessibility: celsius.map { "CPU \($0)°, \(pressureText)" } ?? "CPU temperature unavailable, \(pressureText)"
         )
     }
 }

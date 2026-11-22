@@ -14,8 +14,8 @@ struct MenuBarSegmentTests {
 
     @Test func memorySegmentWithoutValue() {
         let segment = MemoryMonitor.Display(percent: nil, pressure: .normal).segment
-        #expect(segment.text == "—%")
-        #expect(segment.accessibility == "—% memory used, pressure normal")
+        #expect(segment.text == "\u{2012}%")
+        #expect(segment.accessibility == "Memory usage unavailable, pressure normal")
     }
 
     @Test func thermalSegment() {
@@ -28,9 +28,9 @@ struct MenuBarSegmentTests {
 
     @Test func thermalSegmentWithoutValue() {
         let segment = ThermalMonitor.Display(celsius: nil, level: nil).segment
-        #expect(segment.text == "—°")
+        #expect(segment.text == "\u{2012}°")
         #expect(segment.tint == .none)
-        #expect(segment.accessibility == "CPU —°, thermal pressure unknown")
+        #expect(segment.accessibility == "CPU temperature unavailable, thermal pressure unknown")
     }
 
     @Test func memoryPressureTint() {

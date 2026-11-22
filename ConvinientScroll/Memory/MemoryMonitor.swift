@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// Decides when to read memory statistics and when the menu bar needs a redraw.
-/// System events, the timer and the status item are wired up by `MemoryController`.
+/// System events and the timer are wired up by `MemoryController`.
 @MainActor
 final class MemoryMonitor {
     struct Display: Equatable {
@@ -25,6 +25,7 @@ final class MemoryMonitor {
     private var pauseReasons: Set<PauseReason> = []
     private var ticker: AnyCancellable?
     private var needsDisplay = true
+    private var shownPercent = DisplayedPercent()
 
     init(read: @escaping () -> MemoryUsage?, schedule: @escaping Schedule) {
         self.read = read
@@ -40,6 +41,7 @@ final class MemoryMonitor {
             ticker = nil
             lastUsage = nil
             display.percent = nil
+            shownPercent.reset()
             needsDisplay = true
         }
     }
@@ -83,7 +85,7 @@ final class MemoryMonitor {
         }
         lastUsage = usage
         var next = display
-        next.percent = usage.percent
+        next.percent = shownPercent.update(usage.exactPercent)
         publish(next)
     }
 
@@ -97,13 +99,13 @@ final class MemoryMonitor {
 
 extension MemoryMonitor.Display {
     var segment: MenuBarSegment {
-        let text = percent.map { "\($0)%" } ?? "—%"
+        let pressureText = "pressure \(pressure.title.lowercased())"
         return MenuBarSegment(
             symbol: "memorychip",
-            text: text,
+            text: percent.map { "\($0)%" } ?? "\(MenuBarTitle.figureDash)%",
             reservedCharacters: 4,
             tint: pressure.tint,
-            accessibility: "\(text) memory used, pressure \(pressure.title.lowercased())"
+            accessibility: percent.map { "\($0)% memory used, \(pressureText)" } ?? "Memory usage unavailable, \(pressureText)"
         )
     }
 }

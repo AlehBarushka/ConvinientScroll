@@ -65,6 +65,8 @@ struct MenuBarTitleTests {
             return MenuBarTitle.attributedTitle([m, c], font: font, symbol: image).size().width
         }
         #expect(abs(width("9%", "58°") - width("100%", "101°")) < 0.5)
+        #expect(abs(width("9%", "58°") - width(MemoryMonitor.Display(percent: nil, pressure: .normal).segment.text,
+                                               ThermalMonitor.Display(celsius: nil, level: nil).segment.text)) < 0.5)
     }
 
     @Test func accessibilityJoinsSegments() {

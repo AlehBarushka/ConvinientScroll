@@ -9,8 +9,7 @@ final class StatusBarController {
     private var pendingState: IconState?
     private var shownState: IconState?
     private var updateScheduled = false
-    private let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-    private let segmentSymbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+    private let symbols = SymbolImageCache()
     private let segmentFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
     private let modules: [MenuBarModule]
     private var statusMenu: StatusBarMenu?
@@ -138,7 +137,6 @@ final class StatusBarController {
         syncLaunchAtLoginMenuItem()
     }
 
-    /// `nil` keeps the device state and redraws only the module segments.
     private func scheduleIconUpdate(_ state: IconState?) {
         if let state { pendingState = state }
         guard !updateScheduled else { return }
@@ -174,9 +172,10 @@ final class StatusBarController {
         let img = makeFirstAvailableSymbol(candidates)
             ?? makeSymbol("questionmark.circle")
 
-        img?.isTemplate = true
         guard let button = statusItem.button else { return }
-        button.image = img
+        if button.image !== img {
+            button.image = img
+        }
 
         let segments = modules.compactMap(\.segment)
         let title = NSMutableAttributedString()
@@ -185,12 +184,7 @@ final class StatusBarController {
             AppLog.ui.error("No SF Symbol available for the menu bar icon; showing a text title instead")
             title.append(NSAttributedString(string: "MT", attributes: [.font: segmentFont]))
         }
-        title.append(MenuBarTitle.attributedTitle(segments, font: segmentFont) { [weak self] name in
-            guard let self else { return nil }
-            let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(self.segmentSymbolConfig)
-            image?.isTemplate = true
-            return image
-        })
+        title.append(MenuBarTitle.attributedTitle(segments, font: segmentFont) { symbols.image($0, pointSize: 13) })
         button.attributedTitle = title
         button.imagePosition = img == nil ? .noImage : (segments.isEmpty ? .imageOnly : .imageLeading)
         button.setAccessibilityValue(MenuBarTitle.accessibilityValue(segments))
@@ -206,12 +200,7 @@ final class StatusBarController {
     }
 
     private func makeSymbol(_ name: String) -> NSImage? {
-        // Some symbols may be unavailable depending on macOS version.
-        if let configured = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(symbolConfig) {
-            return configured
-        }
-        return NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        symbols.image(name, pointSize: 14)
     }
 
     @objc private func quit() {

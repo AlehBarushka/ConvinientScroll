@@ -2,11 +2,12 @@ import AppKit
 
 nonisolated enum MenuBarTitle {
     static let figureSpace: Character = "\u{2007}"
+    static let figureDash: Character = "\u{2012}"
     static let symbolGap = "\u{2009}"
     static let segmentGap = " "
 
-    /// Figure spaces are as wide as digits in a monospaced-digit font, so padding to a fixed
-    /// character count keeps the item's width when the value gains or loses a digit.
+    /// Figure spaces and figure dashes are as wide as digits in a monospaced-digit font, so padding
+    /// to a fixed character count keeps the item's width when the value gains or loses a digit.
     static func paddedText(_ segment: MenuBarSegment) -> String {
         let missing = segment.reservedCharacters - segment.text.count
         guard missing > 0 else { return segment.text }

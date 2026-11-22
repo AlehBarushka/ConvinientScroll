@@ -63,6 +63,15 @@ struct MemoryMonitorTests {
         #expect(h.ticker.schedules.first?.tolerance == 0.4)
     }
 
+    @Test func jitterAtTheRoundingBoundaryDoesNotRedraw() {
+        let h = Harness()
+        h.readings = [h.gb(32 * 0.704), h.gb(32 * 0.706), h.gb(32 * 0.704), h.gb(32 * 0.706), h.gb(32 * 0.712)]
+        h.monitor.setEnabled(true)
+        for _ in 0..<4 { h.ticker.fire() }
+
+        #expect(h.shown.map(\.percent) == [70, 71])
+    }
+
     @Test func sameWholePercentDoesNotRedraw() {
         let h = Harness()
         h.readings = [h.gb(16), h.gb(16.05), h.gb(19.2)]

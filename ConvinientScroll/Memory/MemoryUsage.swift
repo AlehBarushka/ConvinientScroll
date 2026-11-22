@@ -29,9 +29,12 @@ struct MemoryUsage: Equatable {
     }
 
     var percent: Int {
+        Int(min(max(exactPercent, 0), 100).rounded())
+    }
+
+    var exactPercent: Double {
         guard totalBytes > 0 else { return 0 }
-        let value = (Double(usedBytes) / Double(totalBytes) * 100).rounded()
-        return Int(min(max(value, 0), 100))
+        return Double(usedBytes) / Double(totalBytes) * 100
     }
 
     func detailText(pressure: MemoryPressure) -> String {
