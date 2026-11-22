@@ -10,11 +10,8 @@ final class MemoryMonitor {
         var pressure: MemoryPressure
     }
 
-    enum PauseReason: Hashable {
-        case systemSleep, displaySleep, sessionInactive
-    }
-
-    typealias Schedule = (_ interval: TimeInterval, _ tolerance: TimeInterval, _ action: @escaping () -> Void) -> AnyCancellable
+    typealias PauseReason = MacToolkit.PauseReason
+    typealias Schedule = RepeatingTimer.Schedule
 
     static let interval: TimeInterval = 2
 

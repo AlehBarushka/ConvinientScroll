@@ -7,12 +7,12 @@ import OSLog
 /// pressure colours come from system events.
 @MainActor
 final class MemoryController: NSObject, NSMenuDelegate {
-    private let monitor = MemoryMonitor(read: SystemMemory.usage, schedule: MemoryController.dispatchTimer)
+    private let monitor = MemoryMonitor(read: SystemMemory.usage, schedule: RepeatingTimer.dispatch)
     private var isEnabled = false
     private var statusItem: NSStatusItem?
     private var detailItem: NSMenuItem?
     private var pressureSource: DispatchSourceMemoryPressure?
-    private var observers: [NSObjectProtocol] = []
+    private var pauseObserver: WorkspacePauseObserver?
 
     private let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
 
@@ -44,10 +44,9 @@ final class MemoryController: NSObject, NSMenuDelegate {
 
     private func stop() {
         monitor.setEnabled(false)
-        let center = NSWorkspace.shared.notificationCenter
-        observers.forEach(center.removeObserver)
-        observers.removeAll()
-        for reason in [MemoryMonitor.PauseReason.systemSleep, .displaySleep, .sessionInactive] {
+        pauseObserver?.stop()
+        pauseObserver = nil
+        for reason in PauseReason.allCases {
             monitor.setPaused(false, for: reason)
         }
         pressureSource?.cancel()
@@ -76,36 +75,11 @@ final class MemoryController: NSObject, NSMenuDelegate {
     }
 
     private func observeWorkspace() {
-        let pairs: [(pause: Notification.Name, resume: Notification.Name, reason: MemoryMonitor.PauseReason)] = [
-            (NSWorkspace.willSleepNotification, NSWorkspace.didWakeNotification, .systemSleep),
-            (NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification, .displaySleep),
-            (NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification, .sessionInactive)
-        ]
-        let center = NSWorkspace.shared.notificationCenter
-        for pair in pairs {
-            observers.append(center.addObserver(forName: pair.pause, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.monitor.setPaused(true, for: pair.reason) }
-            })
-            observers.append(center.addObserver(forName: pair.resume, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.monitor.pressureChanged(SystemMemory.pressure())
-                    self.monitor.setPaused(false, for: pair.reason)
-                }
-            })
+        pauseObserver = WorkspacePauseObserver { [weak self] reason, paused in
+            guard let self else { return }
+            if !paused { self.monitor.pressureChanged(SystemMemory.pressure()) }
+            self.monitor.setPaused(paused, for: reason)
         }
-    }
-
-    private static func dispatchTimer(
-        interval: TimeInterval,
-        tolerance: TimeInterval,
-        action: @escaping () -> Void
-    ) -> AnyCancellable {
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(Int(tolerance * 1000)))
-        timer.setEventHandler { MainActor.assumeIsolated { action() } }
-        timer.resume()
-        return AnyCancellable { timer.cancel() }
     }
 
     // MARK: Menu bar
