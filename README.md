@@ -50,7 +50,7 @@ Off by default; turn it on in **Settings → Temperature**.
 
 - A separate menu bar item shows the hottest CPU sensor, for example **58°**, in °C. The item keeps the same width as the digits change.
 - The number turns **yellow** when macOS reports Heavy thermal pressure (the Mac is throttled) and **red** at Critical.
-- Click it to see the temperature, the fan speed and the pressure level, and how long the Mac has spent at each level since the module was turned on.
+- Click it to see the temperature, the fan speed and the pressure level, and how long the Mac has been throttled since the module was turned on, for example **Throttled 1m of 13m**.
 - A notification arrives when the Mac starts throttling: Heavy at most once every 10 minutes, Critical every time. It can be turned off in the same settings section.
 - Works on Apple silicon (M1 and later). On Intel Macs the item shows **—°** and the pressure level only.
 

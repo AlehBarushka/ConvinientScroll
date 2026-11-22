@@ -27,14 +27,24 @@ struct ThermalLevelTests {
         #expect(ThermalText.detail(celsius: nil, fanPercent: nil, level: nil) == "CPU —° · —")
     }
 
-    @Test func statisticsTextKeepsEveryLevel() {
+    @Test func statisticsTextSumsThrottledTime() {
         let durations = [
             LevelDuration(level: .nominal, seconds: 112 * 60),
             LevelDuration(level: .moderate, seconds: 12 * 60),
             LevelDuration(level: .heavy, seconds: 4 * 60)
         ]
-        #expect(ThermalText.statistics(durations) == "Since enabled: Nominal 1h 52m · Moderate 12m · Heavy 4m")
-        #expect(ThermalText.statistics([]) == "Since enabled: —")
+        #expect(ThermalText.statistics(durations) == "Throttled 4m of 2h 8m")
+        #expect(ThermalText.statistics([]) == "Throttled —")
+    }
+
+    @Test func statisticsTextCountsCriticalAsThrottled() {
+        let durations = [
+            LevelDuration(level: .nominal, seconds: 12 * 60),
+            LevelDuration(level: .heavy, seconds: 30),
+            LevelDuration(level: .critical, seconds: 30)
+        ]
+        #expect(ThermalText.statistics(durations) == "Throttled 1m of 13m")
+        #expect(ThermalText.statistics([LevelDuration(level: .nominal, seconds: 42)]) == "Throttled 0s of 42s")
     }
 
     @Test func durationText() {

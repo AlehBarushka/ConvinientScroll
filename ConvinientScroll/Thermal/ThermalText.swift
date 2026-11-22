@@ -13,8 +13,10 @@ nonisolated enum ThermalText {
     }
 
     static func statistics(_ durations: [LevelDuration]) -> String {
-        let parts = durations.map { "\($0.level.title) \(duration($0.seconds))" }
-        return "Since enabled: " + (parts.isEmpty ? "—" : parts.joined(separator: " · "))
+        guard !durations.isEmpty else { return "Throttled —" }
+        let total = durations.reduce(0) { $0 + $1.seconds }
+        let throttled = durations.filter(\.level.isThrottling).reduce(0) { $0 + $1.seconds }
+        return "Throttled \(duration(throttled)) of \(duration(total))"
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
