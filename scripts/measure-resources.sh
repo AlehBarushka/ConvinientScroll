@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Measures how much the running MacToolkit costs while idle and appends one row to
 # docs/resource-usage.md. Run it with the modules set up for the scenario being measured and
-# leave the Mac alone for the duration: no clicks on the app's menus, no sleep.
+# leave the Mac alone for the duration: no clicks on the app's menus. The display is kept awake,
+# and a run is discarded if the display still turned off or the Mac slept, since both pause the
+# app's timers.
 #
 #   ./scripts/measure-resources.sh -n "thermal on, menu closed" [-d 120]
 set -euo pipefail
@@ -67,11 +69,17 @@ echo "Measuring $APP_NAME $VERSION ($KIND, pid $PID) for $DURATION s: $NOTE"
 SAMPLES="$(mktemp)"
 trap 'rm -f "$SAMPLES"' EXIT
 
+caffeinate -d -i -w $$ &
+WINDOW_START="$(date '+%Y-%m-%d %H:%M:%S')"
 CPU_START="$(cpu_seconds)"
 top -l $((DURATION + 1)) -s 1 -pid "$PID" -stats pid,idlew,power \
   | awk -v pid="$PID" '$1 == pid { gsub(/\+/, ""); print $2, $3 }' > "$SAMPLES"
 CPU_END="$(cpu_seconds)"
 kill -0 "$PID" 2>/dev/null || fail "$APP_NAME exited during the measurement"
+WINDOW_END="$(date '+%Y-%m-%d %H:%M:%S')"
+PAUSED="$(pmset -g log | awk -v from="$WINDOW_START" -v to="$WINDOW_END" '
+  /Display is turned off|Entering Sleep|[[:space:]]Sleep[[:space:]]/ { t = $1 " " $2; if (t >= from && t <= to) { print t; exit } }')"
+[[ -z "$PAUSED" ]] || fail "the display turned off or the Mac slept at $PAUSED; the timers were paused, run it again"
 
 read -r WAKEUPS POWER < <(awk -v d="$DURATION" '
   NR == 1 { first = $1; next }

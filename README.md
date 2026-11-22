@@ -86,6 +86,7 @@ Off by default; turn it on in **Settings → Temperature**.
 
 - The thermal pressure level comes from the `com.apple.system.thermalpressurelevel` Darwin notification, so colours and notifications need no polling.
 - The temperature is read every 2 seconds with a 20% leeway from the HID temperature sensors of the CPU dies (`tdie`, `pACC`/`eACC MTR`, `SOC MTR`), picked by name rather than by a per-model table. If a Mac has none, the module falls back to SMC `Tp*`/`Te*` keys; readings outside 10–130 °C are ignored. The fan speed comes from SMC (`F0Ac` against `F0Mx`).
+- To keep the cost down, each sample reads only the four hottest sensors and re-checks all of them every 30 seconds. The number in the menu bar is the median of the last three samples and changes only when it moves by at least 1.5 °C, so it does not flicker with sensor noise. The fan is read only while the menu is open.
 - Sensors are read on a background queue. The HID client and the SMC connection are opened once when the module is turned on and closed when it is turned off.
 - The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active. The level statistics live in memory only.
 

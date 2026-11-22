@@ -11,3 +11,5 @@ CPU — процессорное время процесса за окно за�
 | 2026-11-22 | 2.3.0 (11) | release build | 1d1243a | autoScroll shelf memory | thermal off (same build), menus closed | 180 | 0.100 | 60 | 0.69 | 0.10 | 18.0 | Mac17,2, Apple M5, macOS 26.7.3 |
 | 2026-11-22 | 2.3.0 (11) | release build | 8a33884 | autoScroll shelf memory thermal | final: thermal on, 10 min, menus closed | 600 | 0.202 | 121 | 1.01 | 0.20 | 18.0 | Mac17,2, Apple M5, macOS 26.7.3 |
 | 2026-11-22 | 2.3.0 (11) | release build | 8a33884 | autoScroll shelf memory | final: thermal off (same build), after 2 min warm-up, menus closed | 180 | 0.039 | 23 | 0.55 | 0.04 | 15.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 230f3ed | autoScroll shelf memory thermal | after CPU cut: thermal on, 10 min, menus closed | 600 | 0.113 | 68 | 0.73 | 0.10 | 17.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 230f3ed | autoScroll shelf memory | after CPU cut: thermal off (same build), after 2 min warm-up, menus closed — недействителен: в середине замера погас экран, таймеры стояли | 180 | 0.006 | 3 | 0.03 | 0.01 | 15.0 | Mac17,2, Apple M5, macOS 26.7.3 |
