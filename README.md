@@ -1,11 +1,12 @@
 # Mac Toolkit 🖱️↔️🖲️ · 🗂️ · 📊
 
-A small menu bar utility for macOS (formerly **ConvinientScroll**) with four modules, each of which can be turned on or off in Settings:
+A small menu bar utility for macOS (formerly **ConvinientScroll**) with five modules, each of which can be turned on or off in Settings:
 
 - **Scrolling** — automatically switches “Natural scrolling” depending on what’s connected: a **mouse** or a **trackpad**.
 - **File Shelf** — drag files to the notch (or the top centre of any display), switch to another Space, and drag them out again.
 - **Memory** — shows the share of RAM in use in the menu bar, counted as in Activity Monitor.
 - **Temperature** — shows the CPU temperature in the menu bar and warns when macOS throttles the Mac to cool it.
+- **Apps & Leftovers** — lists installed apps with the files they keep in Library, and finds what removed apps left behind.
 
 All modules share **one menu bar item** and one menu: the scrolling or shelf icon, then the memory and temperature readings when those modules are on. Hold ⌘ and drag the item to move the whole group along the menu bar.
 
@@ -56,6 +57,17 @@ Off by default; turn it on in **Settings → Temperature**.
 - A notification arrives when the Mac starts throttling: Heavy at most once every 10 minutes, Critical every time. It can be turned off in the same settings section.
 - Works on Apple silicon (M1 and later). On Intel Macs the item shows **—°** and the pressure level only.
 
+### Apps & Leftovers
+
+On by default; **Apps…** in the menu bar menu opens the window, and the module can be turned off in **Settings → Apps**.
+
+- **Installed** lists apps from `/Applications` and `~/Applications` with their sizes and the files they keep in `~/Library` and `/Library`: settings, caches, logs, window state and background services. Caches and logs can be cleaned; settings and data of installed apps are view-only.
+- **Removed** shows apps you moved to the Trash and what they left behind. A notification such as **Example left 120 MB behind** can be turned off in the same settings section.
+- **Orphans** lists files that no installed app uses. Only user caches, logs and window state are ticked by default.
+- Files are moved to the **Trash**, never deleted outright. Items in `/Library` ask for an administrator password.
+- Full Disk Access is optional: without it, app containers in `~/Library/Containers` cannot be read and are shown as protected.
+- Files of Apple apps are never shown.
+
 ---
 
 ## 🧠 How it works
@@ -91,6 +103,13 @@ Off by default; turn it on in **Settings → Temperature**.
 - To keep the cost down, each sample reads only the four hottest sensors and re-checks all of them every 30 seconds. The number in the menu bar is the median of the last three samples and changes only when it moves by at least 1.5 °C, so it does not flicker with sensor noise. The fan is read only while the menu is open.
 - Sensors are read on a background queue. The HID client and the SMC connection are opened once when the module is turned on and closed when it is turned off.
 - The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active. The level statistics live in memory only.
+
+**Apps & Leftovers**
+
+- The module watches `/Applications` and `~/Applications` with FSEvents (2 seconds latency), so there is no polling. When an app disappears, a one-shot check runs 30 seconds later; if the app has not come back, or moved elsewhere according to LaunchServices, it is reported as removed. Events inside already installed bundles are ignored.
+- The list of apps is kept in `~/Library/Application Support/com.alehbarushka.convinientscroll/Apps`. Library entries are matched by bundle id, then Team ID, then by name.
+- Before anything is removed, ownership is checked again against the installed apps, so settings and data of an app you still have are never touched.
+- The window and its size scans stop when the window is closed.
 
 Apart from the Memory and Temperature modules, the app runs no periodic timers when idle: everything is driven by system notifications.
 

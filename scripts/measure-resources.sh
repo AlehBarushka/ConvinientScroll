@@ -58,7 +58,7 @@ module() {
   value="$(defaults read "$DOMAIN" "modules.$1.enabled" 2>/dev/null || echo "$2")"
   [[ "$value" == 1 ]] && echo "$1"
 }
-MODULES="$(printf '%s ' $(module autoScroll 1) $(module shelf 1) $(module memory 0) $(module thermal 0))"
+MODULES="$(printf '%s ' $(module autoScroll 1) $(module shelf 1) $(module memory 0) $(module thermal 0) $(module apps 1))"
 MODULES="${MODULES% }"
 
 MAC="$(sysctl -n hw.model), $(sysctl -n machdep.cpu.brand_string), macOS $(sw_vers -productVersion)"
