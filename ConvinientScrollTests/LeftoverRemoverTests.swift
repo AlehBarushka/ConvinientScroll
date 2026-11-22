@@ -126,6 +126,19 @@ import Testing
         #expect(recorder.calls == ["privileged"])
     }
 
+    @Test func failedPrivilegedRunIsJudgedByWhatIsLeft() {
+        let recorder = Recorder()
+        let moved = Self.item("/Library/Caches/a", domain: .system, folder: .caches, size: 3)
+        let stuck = Self.item("/Library/Caches/b", domain: .system, folder: .caches, size: 4)
+        let env = Self.environment(recorder: recorder, privileged: { _ throws(PrivilegedError) in throw .failed("x") },
+                                   exists: { $0.path == "/Library/Caches/b" })
+        let report = LeftoverRemover.remove([moved, stuck], environment: env)
+        #expect(report.removed == [moved.id])
+        #expect(report.failed == [stuck.id])
+        #expect(!report.adminCancelled)
+        #expect(report.bytes == 3)
+    }
+
     @Test func sameNamedSystemItemsGetDistinctDestinations() {
         let recorder = Recorder()
         let first = Self.item("/Library/Caches/x.log", domain: .system, folder: .caches)

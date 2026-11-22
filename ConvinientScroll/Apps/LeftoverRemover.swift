@@ -18,9 +18,13 @@ nonisolated struct RemovalEnvironment: Sendable {
         RemovalEnvironment(
             trash: { url in try FileManager.default.trashItem(at: url, resultingItemURL: nil) },
             bootoutUser: { url in
-                let result = try? runProcess("/bin/launchctl", ["bootout", "gui/\(getuid())", url.path])
-                if let result, result.status != 0 {
-                    AppLog.apps.info("bootout \(url.path, privacy: .private) exited \(result.status)")
+                do {
+                    let result = try runProcess("/bin/launchctl", ["bootout", "gui/\(getuid())", url.path])
+                    if result.status != 0 {
+                        AppLog.apps.info("bootout \(url.path, privacy: .private) exited \(result.status)")
+                    }
+                } catch {
+                    AppLog.apps.error("bootout \(url.path, privacy: .private) did not start: \(error.localizedDescription)")
                 }
             },
             runPrivileged: { script throws(PrivilegedError) in
@@ -31,7 +35,7 @@ nonisolated struct RemovalEnvironment: Sendable {
                     throw .failed(error.localizedDescription)
                 }
                 guard result.status != 0 else { return }
-                throw result.stderr.contains("-128") ? .cancelled : .failed(result.stderr)
+                throw result.stderr.contains("(-128)") ? .cancelled : .failed(result.stderr)
             },
             exists: { FileManager.default.fileExists(atPath: $0.path) },
             userTrash: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".Trash"),
@@ -116,12 +120,13 @@ nonisolated enum LeftoverRemover {
         do {
             try environment.runPrivileged(script)
         } catch {
-            if error == .cancelled { adminCancelled = true }
-            if case .failed(let message) = error {
+            switch error {
+            case .cancelled:
+                failed.append(contentsOf: systemItems.map(\.id))
+                return RemovalReport(removed: removed, failed: failed, adminCancelled: true, bytes: bytes)
+            case .failed(let message):
                 AppLog.apps.error("privileged removal failed: \(message, privacy: .private)")
             }
-            failed.append(contentsOf: systemItems.map(\.id))
-            return RemovalReport(removed: removed, failed: failed, adminCancelled: adminCancelled, bytes: bytes)
         }
 
         for item in systemItems {
