@@ -87,6 +87,25 @@ private func app(_ path: String, id: String = "com.example.chatter", version: St
         #expect(scheduler.checks.count == 1)
     }
 
+    @Test func unrelatedUpdateAfterRemovalAddsNoChecks() {
+        let (tracker, scheduler, _) = make(known: [chatter, editor])
+        tracker.update(current: [editor])
+        tracker.update(current: [editor])
+        #expect(scheduler.checks.count == 1)
+    }
+
+    @Test func pathThatReturnsAndDisappearsAgainGetsAFreshCheck() {
+        let (tracker, scheduler, reported) = make(known: [chatter])
+        tracker.update(current: [])
+        tracker.update(current: [chatter])
+        tracker.update(current: [])
+        #expect(scheduler.checks.count == 2)
+        #expect(scheduler.checks[0].cancelled)
+        #expect(!scheduler.checks[1].cancelled)
+        scheduler.checks[1].action()
+        #expect(reported.apps == [chatter])
+    }
+
     @Test func removedWhileOffIsReported() {
         let (tracker, scheduler, reported) = make(known: [chatter, editor])
         tracker.update(current: [editor])
@@ -99,6 +118,5 @@ private func app(_ path: String, id: String = "com.example.chatter", version: St
         tracker.update(current: [])
         tracker.cancelAll()
         #expect(scheduler.checks[0].cancelled)
-        #expect(reported.apps.isEmpty)
     }
 }

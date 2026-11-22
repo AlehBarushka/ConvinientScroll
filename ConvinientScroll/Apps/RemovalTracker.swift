@@ -20,10 +20,10 @@ final class RemovalTracker {
 
     func update(current: [InstalledApp]) {
         let currentPaths = Set(current.map(\.path))
-        for path in pending.keys where currentPaths.contains(path) {
+        for path in pending.keys.filter(currentPaths.contains) {
             pending.removeValue(forKey: path)?.cancel()
         }
-        for app in known where !currentPaths.contains(app.path) && pending[app.path] == nil {
+        for app in known where !currentPaths.contains(app.path) {
             pending[app.path] = schedule(Self.confirmationDelay) { [weak self] in
                 self?.confirm(app)
             }
