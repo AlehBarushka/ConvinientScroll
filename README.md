@@ -1,10 +1,11 @@
 # Mac Toolkit 🖱️↔️🖲️ · 🗂️ · 📊
 
-A small menu bar utility for macOS (formerly **ConvinientScroll**) with three modules, each of which can be turned on or off in Settings:
+A small menu bar utility for macOS (formerly **ConvinientScroll**) with four modules, each of which can be turned on or off in Settings:
 
 - **Scrolling** — automatically switches “Natural scrolling” depending on what’s connected: a **mouse** or a **trackpad**.
 - **File Shelf** — drag files to the notch (or the top centre of any display), switch to another Space, and drag them out again.
 - **Memory** — shows the share of RAM in use in the menu bar, counted as in Activity Monitor.
+- **Temperature** — shows the CPU temperature in the menu bar and warns when macOS throttles the Mac to cool it.
 
 ---
 
@@ -43,6 +44,16 @@ Off by default; turn it on in **Settings → Memory**.
 - Click it to see the amount in GB and the pressure level, or to open Activity Monitor.
 - Hold ⌘ and drag the item to move it along the menu bar.
 
+### Temperature
+
+Off by default; turn it on in **Settings → Temperature**.
+
+- A separate menu bar item shows the hottest CPU sensor, for example **58°**, in °C. The item keeps the same width as the digits change.
+- The number turns **yellow** when macOS reports Heavy thermal pressure (the Mac is throttled) and **red** at Critical.
+- Click it to see the temperature, the fan speed and the pressure level, a chart of the last 10 minutes (temperature as a line, fan as a dashed line, throttling as a tinted background) and how long the Mac has spent at each level since the module was turned on.
+- A notification arrives when the Mac starts throttling: Heavy at most once every 10 minutes, Critical every time. It can be turned off in the same settings section.
+- Works on Apple silicon (M1 and later). On Intel Macs the item shows **—°** and the pressure level only.
+
 ---
 
 ## 🧠 How it works
@@ -71,7 +82,14 @@ Off by default; turn it on in **Settings → Memory**.
 - The menu bar item is redrawn only when the whole percentage or the pressure level changes. Pressure comes from a `DispatchSource` memory pressure event, not from polling.
 - The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active.
 
-Apart from the Memory module, the app runs no periodic timers when idle: everything is driven by system notifications.
+**Temperature**
+
+- The thermal pressure level comes from the `com.apple.system.thermalpressurelevel` Darwin notification, so colours and notifications need no polling.
+- The temperature is read every 2 seconds with a 20% leeway from the HID temperature sensors of the CPU dies (`tdie`, `pACC`/`eACC MTR`, `SOC MTR`), picked by name rather than by a per-model table. If a Mac has none, the module falls back to SMC `Tp*`/`Te*` keys; readings outside 10–130 °C are ignored. The fan speed comes from SMC (`F0Ac` against `F0Mx`).
+- Sensors are read on a background queue. The HID client and the SMC connection are opened once when the module is turned on and closed when it is turned off.
+- The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active. The history lives in memory only.
+
+Apart from the Memory and Temperature modules, the app runs no periodic timers when idle: everything is driven by system notifications.
 
 ---
 
@@ -139,6 +157,8 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
   - Check that **File Shelf** is on in Settings; an empty shelf is invisible until a file is dragged close
 - **The memory item is missing**
   - Check that **Memory** is on in Settings; on a crowded menu bar the item can be hidden behind the notch, so ⌘-drag it closer to the clock
+- **The temperature shows —°**
+  - The Mac exposes no CPU temperature sensor the module recognises (for example an Intel Mac). The log lists which sensors were found: `log show --last 1h --info --predicate 'subsystem == "com.alehbarushka.convinientscroll" AND category == "thermal"'`
 
 ---
 
@@ -148,6 +168,7 @@ To change the system setting `com.apple.swipescrolldirection`, the app must be *
 - macOS preferences (`CFPreferences`) — system preference synchronization
 - Quick Look Thumbnailing — shelf card previews
 - Mach host statistics (`host_statistics64`) — memory usage
+- HID temperature sensors, SMC and the thermal pressure notification — CPU temperature, fan speed and throttling
 
 ---
 
