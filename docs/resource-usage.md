@@ -1,0 +1,13 @@
+# Потребление ресурсов
+
+Строки добавляет `scripts/measure-resources.sh`; когда мерить, сказано в `CLAUDE.md` («Замер ресурсов»).
+CPU — процессорное время процесса за окно замера; пробуждения — idle wakeups в секунду; Energy — среднее
+`POWER` из `top` (то же, что «Energy Impact» в Activity Monitor); память — `footprint`.
+
+| Дата | Версия | Сборка | Коммит | Модули | Сценарий | Окно, с | CPU, % | CPU, мс/мин | Пробуждения/с | Energy | Память, МБ | Mac |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-11-22 | 2.3.0 (11) | installed | release | autoScroll shelf memory | baseline before thermal: memory on, menus closed | 180 | 0.067 | 40 | 0.76 | 0.06 | 18.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 1d1243a | autoScroll shelf memory thermal | thermal on, menus closed | 180 | 0.156 | 93 | 0.89 | 0.16 | 17.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 1d1243a | autoScroll shelf memory | thermal off (same build), menus closed | 180 | 0.100 | 60 | 0.69 | 0.10 | 18.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 8a33884 | autoScroll shelf memory thermal | final: thermal on, 10 min, menus closed | 600 | 0.202 | 121 | 1.01 | 0.20 | 18.0 | Mac17,2, Apple M5, macOS 26.7.3 |
+| 2026-11-22 | 2.3.0 (11) | release build | 8a33884 | autoScroll shelf memory | final: thermal off (same build), after 2 min warm-up, menus closed | 180 | 0.039 | 23 | 0.55 | 0.04 | 15.0 | Mac17,2, Apple M5, macOS 26.7.3 |
