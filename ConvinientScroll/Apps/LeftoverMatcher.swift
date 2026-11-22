@@ -29,28 +29,44 @@ nonisolated enum LeftoverMatcher {
     }
 
     static func match(_ entry: LibraryEntry, app: InstalledApp, installed: [InstalledApp]) -> MatchKind? {
+        match(entry, app: app, owners: OwnerIndex(installed))
+    }
+
+    static func match(_ entry: LibraryEntry, app: InstalledApp, owners: OwnerIndex) -> MatchKind? {
         let name = entry.name.lowercased()
         if isApple(name) { return nil }
-        let others = installed.filter { $0.path != app.path }
-        if others.contains(where: { ownsByBundleID($0, name) }) { return nil }
-        if ownsByBundleID(app, name) { return .bundleID }
-        if entry.folder == .groupContainers, let team = app.teamID?.lowercased(), name.hasPrefix(team + "."),
-           !others.contains(where: { $0.teamID?.lowercased() == team }) {
+        let path = app.path
+        if owners.bundleIDOwners(of: name).contains(where: { $0 != path }) { return nil }
+        let team = app.teamID?.lowercased()
+        let teamIsShared = team.map { owners.hasOtherApp(withTeam: $0, than: path) } ?? false
+        switch bundleIDMatch(app, name) {
+        case .direct:
+            return .bundleID
+        case .group:
+            return entry.folder == .groupContainers && teamIsShared ? nil : .bundleID
+        case nil:
+            break
+        }
+        if entry.folder == .groupContainers, let team, name.hasPrefix(team + "."), !teamIsShared {
             return .teamID
         }
-        if entry.folder.allowsNameMatch {
+        if entry.folder.allowsNameMatch, !app.bundleID.lowercased().hasPrefix("com.apple.") {
             let names = Set(app.matchNames.map { $0.lowercased() })
-            if names.contains(name), !others.contains(where: { $0.matchNames.contains { names.contains($0.lowercased()) } }) {
+            if names.contains(name), !names.contains(where: { owners.nameOwners($0).contains { $0 != path } }) {
                 return .name
             }
         }
         return nil
     }
 
-    private static func ownsByBundleID(_ app: InstalledApp, _ lowerName: String) -> Bool {
-        app.ownedIDs.contains { id in
-            let id = id.lowercased()
-            return lowerName == id || lowerName.hasPrefix(id + ".") || lowerName == "group." + id || lowerName.hasPrefix("group." + id + ".")
-        }
+    private enum BundleIDMatch {
+        case direct, group
+    }
+
+    private static func bundleIDMatch(_ app: InstalledApp, _ lowerName: String) -> BundleIDMatch? {
+        let ids = app.ownedIDs.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if ids.contains(where: { lowerName == $0 || lowerName.hasPrefix($0 + ".") }) { return .direct }
+        if ids.contains(where: { lowerName == "group." + $0 || lowerName.hasPrefix("group." + $0 + ".") }) { return .group }
+        return nil
     }
 }

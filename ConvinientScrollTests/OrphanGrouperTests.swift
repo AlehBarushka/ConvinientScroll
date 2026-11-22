@@ -41,6 +41,47 @@ import Testing
     @Test func plainNamesAreSkipped() {
         #expect(groups([entry(.applicationSupport, "OldPlayer")]).isEmpty)
     }
+    @Test func onlyUserCachesLogsAndWindowStateStartChecked() {
+        let result = groups([
+            entry(.caches, "com.example.oldplayer"),
+            entry(.logs, "com.example.oldplayer.log"),
+            entry(.savedState, "com.example.oldplayer.savedState"),
+            entry(.preferences, "com.example.oldplayer.plist"),
+            entry(.launchAgents, "com.example.oldplayer.agent.plist"),
+            entry(.applicationScripts, "com.example.oldplayer.scripts"),
+            entry(.caches, "com.example.oldplayer.system", .system),
+            entry(.logs, "com.example.oldplayer.system.log", .system),
+        ])
+        #expect(result.map(\.id) == ["com.example.oldplayer"])
+        #expect(result[0].checkedByDefault.map(\.lastPathComponent).sorted()
+            == ["com.example.oldplayer", "com.example.oldplayer.log", "com.example.oldplayer.savedState"])
+    }
+    @Test func homebrewServicesAreSkipped() {
+        #expect(groups([entry(.launchAgents, "homebrew.mxcl.postgresql.plist")]).isEmpty)
+    }
+    @Test func groupOfAnInstalledVendorStartsUnchecked() {
+        let writer = InstalledApp(path: "/Applications/Writer.app", bundleID: "com.example.Writer", name: "Writer",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        let result = groups([entry(.caches, "com.example.updater"), entry(.caches, "org.example.oldplayer")], installed: [writer])
+        #expect(result.map(\.id) == ["com.example.updater", "org.example.oldplayer"])
+        #expect(result[0].sharesVendorWithInstalledApp)
+        #expect(result[0].checkedByDefault.isEmpty)
+        #expect(result[1].checkedByDefault.count == 1)
+    }
+    @Test func pruningDropsItemsOfNewlyInstalledApps() {
+        let before = groups([entry(.preferences, "com.example.oldplayer.plist"), entry(.caches, "com.example.oldplayer.helper"),
+                             entry(.caches, "org.example.tool")])
+        let helper = InstalledApp(path: "/Applications/Helper.app", bundleID: "com.example.oldplayer.helper", name: "Helper",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        let tool = InstalledApp(path: "/Applications/Tool.app", bundleID: "org.example.tool", name: "Tool",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+
+        let after = OrphanGrouper.pruned(before, installed: [helper, tool])
+
+        #expect(after.map(\.id) == ["com.example.oldplayer"])
+        #expect(after[0].items.map(\.entry.name) == ["com.example.oldplayer.plist"])
+        #expect(after[0].sharesVendorWithInstalledApp)
+    }
     @Test func protectedWithoutAccessIsNotAccessible() {
         let result = groups([entry(.containers, "com.example.meetings")], canReadProtected: false)
         #expect(result.count == 1)

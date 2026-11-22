@@ -27,13 +27,8 @@ struct AppsView: View {
             if let items { lastConfirmation = items }
         }
         .alert(confirmationTitle(model.pendingRemoval ?? lastConfirmation), isPresented: isConfirming, presenting: model.pendingRemoval) { items in
-            Button("Cancel", role: .cancel) {}
-            Button("Move to Trash", role: .destructive) {
-                Task {
-                    model.pendingRemoval = items
-                    await model.confirmRemoval()
-                }
-            }
+            Button("Cancel", role: .cancel) { model.pendingRemoval = nil }
+            Button("Move to Trash", role: .destructive) { model.startRemoval() }
         } message: { items in
             Text(confirmationMessage(items))
         }
@@ -43,7 +38,11 @@ struct AppsView: View {
     private var isConfirming: Binding<Bool> {
         Binding(
             get: { model.pendingRemoval != nil },
-            set: { if !$0 { model.pendingRemoval = nil } })
+            set: { isShown in
+                guard !isShown else { return }
+                // SwiftUI may clear the binding before the alert button's action runs, and that action must still find the list.
+                Task { model.pendingRemoval = nil }
+            })
     }
 
     private func confirmationTitle(_ items: [LeftoverItem]) -> String {
@@ -266,20 +265,13 @@ private struct AppsDetail: View {
     @ViewBuilder
     private var reportLine: some View {
         if let report = model.lastReport {
-            Text(reportText(report))
+            Text(LeftoverNotice.summary(report))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
         }
-    }
-
-    private func reportText(_ report: RemovalReport) -> String {
-        let moved = counted(report.removed.count, "item")
-        return report.adminCancelled
-            ? "Moved \(moved) to the Trash. Items in /Library were left in place."
-            : "Moved \(moved) (\(formatted(report.bytes))) to the Trash"
     }
 }
 

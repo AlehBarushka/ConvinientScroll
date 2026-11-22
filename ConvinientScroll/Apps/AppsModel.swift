@@ -24,6 +24,7 @@ final class AppsModel: ObservableObject {
             selectedID = nil
             items = []
             checked = []
+            pendingRemoval = nil
         }
     }
 
@@ -111,10 +112,11 @@ final class AppsModel: ObservableObject {
         selectedID = id
         items = []
         checked = []
+        pendingRemoval = nil
         guard let id else { return }
         let loaded = await loadItems(for: id)
         guard selectedID == id, section == started else { return }
-        apply(loaded)
+        apply(loaded, for: id)
     }
 
     func focus(bundleID: String) async {
@@ -134,14 +136,23 @@ final class AppsModel: ObservableObject {
     }
 
     func confirmRemoval() async {
-        guard !isRemoving, let requested = pendingRemoval else { return }
+        await startRemoval()?.value
+    }
+
+    @discardableResult
+    func startRemoval() -> Task<Void, Never>? {
+        guard !isRemoving, let requested = pendingRemoval else { return nil }
         pendingRemoval = nil
         let confirmed = validated(requested)
-        guard !confirmed.isEmpty else { return }
+        guard !confirmed.isEmpty else { return nil }
         let startedSection = section
         let id = selectedID
         let before = rows
         isRemoving = true
+        return Task { await self.finishRemoval(confirmed, section: startedSection, id: id, before: before) }
+    }
+
+    private func finishRemoval(_ confirmed: [LeftoverItem], section startedSection: AppsSection, id: String?, before: [AppsRow]) async {
         lastReport = await controller.remove(confirmed)
         isRemoving = false
         if let id { sizes[SizeKey(section: startedSection, id: id)] = nil }
@@ -211,11 +222,14 @@ final class AppsModel: ObservableObject {
         guard !isStopped else { return }
         sizesRequested = true
         let current = section
-        for entry in allEntries() where sizes[SizeKey(section: current, id: entry.row.id)] == nil {
+        let unsized = allEntries().map(\.row.id).filter { sizes[SizeKey(section: current, id: $0)] == nil }
+        guard !unsized.isEmpty else { return }
+        let snapshot = current == .orphans ? nil : await controller.librarySnapshot()
+        for id in unsized {
             guard section == current, !Task.isCancelled, !isStopped else { return }
-            guard let size = await size(of: entry.row.id) else { continue }
+            guard let size = await size(of: id, in: snapshot) else { continue }
             guard section == current, !Task.isCancelled, !isStopped else { return }
-            sizes[SizeKey(section: current, id: entry.row.id)] = size
+            sizes[SizeKey(section: current, id: id)] = size
         }
     }
 
@@ -232,12 +246,26 @@ final class AppsModel: ObservableObject {
     }
 
     private func syncWithController() async {
+        let selectedGroupChanged = pruneOrphans()
         if let id = selectedID, !allEntries().contains(where: { $0.row.id == id }) {
             await select(rows.first?.id)
         } else if selectedID == nil, let first = rows.first?.id {
             await select(first)
+        } else if selectedGroupChanged {
+            await select(selectedID)
         }
         await refreshSizes()
+    }
+
+    private func pruneOrphans() -> Bool {
+        guard let groups = orphans else { return false }
+        let kept = OrphanGrouper.pruned(groups, installed: controller.installed)
+        guard kept != groups else { return false }
+        orphans = kept
+        let changed = groups.filter { !kept.contains($0) }.map(\.id)
+        for id in changed { sizes[SizeKey(section: .orphans, id: id)] = nil }
+        guard section == .orphans, let id = selectedID else { return false }
+        return changed.contains(id)
     }
 
     private func validated(_ items: [LeftoverItem]) -> [LeftoverItem] {
@@ -300,9 +328,17 @@ final class AppsModel: ObservableObject {
         }
     }
 
-    private func apply(_ loaded: [LeftoverItem]) {
+    private func apply(_ loaded: [LeftoverItem], for id: String) {
         items = loaded
-        checked = section == .installed ? [] : Set(loaded.filter(\.isSelectedByDefault).map(\.id))
+        switch section {
+        case .installed:
+            checked = []
+        case .removed:
+            checked = Set(loaded.filter(\.isSelectedByDefault).map(\.id))
+        case .orphans:
+            let defaults = orphans?.first { $0.id == id }?.checkedByDefault ?? []
+            checked = Set(loaded.map(\.id)).intersection(defaults)
+        }
     }
 
     private func moveSelection(after before: [AppsRow], from id: String) {
@@ -316,16 +352,16 @@ final class AppsModel: ObservableObject {
         pendingLoad = Task { await self.select(next) }
     }
 
-    private func size(of id: String) async -> Int64? {
+    private func size(of id: String, in snapshot: LibrarySnapshot?) async -> Int64? {
         switch section {
         case .installed:
-            guard let app = app(for: id) else { return nil }
-            let leftovers = await controller.leftovers(for: app)
+            guard let app = app(for: id), let snapshot else { return nil }
+            let leftovers = await controller.leftovers(for: app, in: snapshot)
             let own = await Task.detached(priority: .utility) { LibraryScanner.size(of: URL(filePath: app.path)) }.value
             return own + leftovers.compactMap(\.size).reduce(0, +)
         case .removed:
-            guard let app = app(for: id) else { return nil }
-            return await controller.leftovers(for: app).compactMap(\.size).reduce(0, +)
+            guard let app = app(for: id), let snapshot else { return nil }
+            return await controller.leftovers(for: app, in: snapshot).compactMap(\.size).reduce(0, +)
         case .orphans:
             guard let group = orphans?.first(where: { $0.id == id }) else { return nil }
             return await Self.withSizes(group.items).compactMap(\.size).reduce(0, +)

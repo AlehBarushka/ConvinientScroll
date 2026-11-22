@@ -25,9 +25,13 @@ nonisolated struct LibraryScanner: Sendable {
     }
 
     func leftovers(of app: InstalledApp, installed: [InstalledApp]) -> [LeftoverItem] {
-        entries()
+        leftovers(of: app, in: entries(), owners: OwnerIndex(installed))
+    }
+
+    func leftovers(of app: InstalledApp, in entries: [LibraryEntry], owners: OwnerIndex) -> [LeftoverItem] {
+        entries
             .compactMap { entry -> LeftoverItem? in
-                guard let match = LeftoverMatcher.match(entry, app: app, installed: installed) else { return nil }
+                guard let match = LeftoverMatcher.match(entry, app: app, owners: owners) else { return nil }
                 var item = LeftoverItem.make(entry, match: match, canReadProtected: canReadProtected)
                 if item.isAccessible { item.size = Self.size(of: entry.url) }
                 return item
@@ -35,8 +39,8 @@ nonisolated struct LibraryScanner: Sendable {
             .sorted { $0.entry.url.path < $1.entry.url.path }
     }
 
-    func orphans(installed: [InstalledApp], hidden: Set<String>) -> [OrphanGroup] {
-        OrphanGrouper.groups(entries(), installed: installed, hidden: hidden, canReadProtected: canReadProtected)
+    func orphans(installed: [InstalledApp], hidden: Set<String>, alsoOwned: [String] = []) -> [OrphanGroup] {
+        OrphanGrouper.groups(entries(), installed: installed, hidden: hidden, canReadProtected: canReadProtected, alsoOwned: alsoOwned)
     }
 
     static func size(of url: URL) -> Int64 {
@@ -51,4 +55,10 @@ nonisolated struct LibraryScanner: Sendable {
         for case let child as URL in walker { total += allocated(child) }
         return total
     }
+}
+
+nonisolated struct LibrarySnapshot: Sendable {
+    var library: LibraryScanner
+    var entries: [LibraryEntry]
+    var owners: OwnerIndex
 }

@@ -24,6 +24,7 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         let plist = sandbox.user.appending(path: "Preferences/com.example.chatter.plist")
         try sandbox.writeFile(plist, bytes: 4096)
         let controller = sandbox.makeController()
@@ -47,19 +48,20 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         let bundle = try sandbox.installApp("Chatter", id: "com.example.chatter")
+        try sandbox.installApp("Notes", id: "com.example.notes")
         let controller = sandbox.makeController()
         await controller.setEnabled(true)
 
         try FileManager.default.removeItem(at: bundle)
         sandbox.watcher.fire()
         await controller.pendingWork?.value
-        #expect(controller.installed.isEmpty)
-        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
+        #expect(controller.installed.map(\.bundleID) == ["com.example.notes"])
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
         #expect(sandbox.scheduler.checks.count == 1)
         sandbox.scheduler.runPending()
         await controller.pendingWork?.value
 
-        #expect(sandbox.store.loadIndex()?.isEmpty == true)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.notes"])
         #expect(sandbox.notices.calls.isEmpty)
         #expect(controller.removed.isEmpty)
         #expect(sandbox.store.loadRemoved().isEmpty)
@@ -89,6 +91,7 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
         let controller = sandbox.makeController()
         await controller.setEnabled(true)
@@ -99,16 +102,18 @@ import Testing
 
         #expect(check.cancelled)
         #expect(sandbox.watcher.isWatching == false)
-        #expect(sandbox.store.loadIndex()?.isEmpty == true)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.notes"])
     }
 
     @Test func watchTurnedOffDuringTheSearchDoesNotNotify() async throws {
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
         let controller = sandbox.makeController()
         await controller.setEnabled(true)
+        #expect(sandbox.scheduler.checks.count == 1)
         sandbox.searchHook.beforeSearch = { controller.watchEnabled = false }
 
         sandbox.scheduler.runPending()
@@ -121,9 +126,11 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
         let controller = sandbox.makeController()
         await controller.setEnabled(true)
+        #expect(sandbox.scheduler.checks.count == 1)
         try sandbox.installApp("Chatter", id: "com.example.chatter")
         var shown: [[String]] = []
         let subscription = controller.$removed.sink { shown.append($0.map(\.id)) }
@@ -133,7 +140,7 @@ import Testing
         sandbox.scheduler.runPending()
         await controller.pendingWork?.value
 
-        #expect(controller.installed.map(\.bundleID) == ["com.example.chatter"])
+        #expect(controller.installed.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
         #expect(shown.allSatisfy { $0.isEmpty })
         #expect(sandbox.notices.calls.isEmpty)
     }
@@ -142,14 +149,15 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         let controller = sandbox.makeController()
 
         await controller.setEnabled(true)
-        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
 
         sandbox.scheduler.runPending()
         await controller.pendingWork?.value
-        #expect(sandbox.store.loadIndex()?.isEmpty == true)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.notes"])
     }
 
     @Test func turningWatchOnIgnoresAppsRemovedWhileOff() async throws {
@@ -176,6 +184,7 @@ import Testing
         let sandbox = try Sandbox()
         defer { sandbox.cleanUp() }
         sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
         let controller = sandbox.makeController()
         await controller.setEnabled(true)
         let check = try #require(sandbox.scheduler.checks.first)
@@ -242,6 +251,145 @@ import Testing
         #expect(rest.removed == [items[1].id])
         #expect(controller.removed.isEmpty)
         #expect(sandbox.store.loadRemoved().isEmpty)
+    }
+
+    @Test func removalSkipsSettingsOfAnAppInstalledSinceTheScan() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([])
+        let plist = sandbox.user.appending(path: "Preferences/com.example.foo.plist")
+        try sandbox.writeFile(plist, bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let group = try #require(await controller.orphans(hidden: []).first { $0.id == "com.example.foo" })
+        let item = try #require(group.items.first)
+
+        try sandbox.installApp("Foo", id: "com.example.foo")
+        await controller.refreshInstalled()
+        let report = await controller.remove([item])
+
+        #expect(report.removed.isEmpty)
+        #expect(report.failed.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: plist.path))
+    }
+
+    @Test func unchangedIndexIsNotRewritten() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        try sandbox.installApp("Chatter", id: "com.example.chatter")
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let index = sandbox.store.root.appending(path: "index.json")
+        #expect(FileManager.default.fileExists(atPath: index.path))
+        try FileManager.default.removeItem(at: index)
+
+        await controller.refreshInstalled()
+        sandbox.watcher.fire()
+        await controller.pendingWork?.value
+        #expect(FileManager.default.fileExists(atPath: index.path) == false)
+
+        try sandbox.installApp("Notes", id: "com.example.notes")
+        await controller.refreshInstalled()
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID).sorted() == ["com.example.chatter", "com.example.notes"])
+    }
+
+    @Test func eventsInsideAppBundlesCannotChangeTheList() {
+        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/"]))
+        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app/Contents/", "/Applications/Utilities/"]))
+        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app"]))
+        #expect(ApplicationsWatcher.canChangeAppList([]))
+        #expect(ApplicationsWatcher.canChangeAppList(["/Applications/Chatter.app/", "/Applications/Notes.APP/Contents/Resources/"]) == false)
+    }
+
+    @Test func emptyScanWhileAppsAreKnownIsAFailure() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+
+        await controller.setEnabled(true)
+        sandbox.watcher.fire()
+        await controller.pendingWork?.value
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(sandbox.scheduler.checks.isEmpty)
+        #expect(controller.removed.isEmpty)
+        #expect(sandbox.notices.calls.isEmpty)
+        #expect(sandbox.store.loadIndex()?.map(\.bundleID) == ["com.example.chatter"])
+    }
+
+    @Test func ownFilesAreNeverOffered() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Toolkit", id: sandbox.ownBundleID)])
+        try sandbox.installApp("Notes", id: "com.example.notes")
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/\(sandbox.ownBundleID).plist"), bytes: 4096)
+        try sandbox.writeFile(sandbox.user.appending(path: "Caches/\(sandbox.ownBundleID).ShipIt/data.bin"), bytes: 4096)
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.old.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+
+        await controller.setEnabled(true)
+        #expect(sandbox.scheduler.checks.count == 1)
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(controller.removed.isEmpty)
+        #expect(sandbox.notices.calls.isEmpty)
+        #expect(await controller.orphans(hidden: []).map(\.id) == ["com.example.old"])
+    }
+
+    @Test func appMovedElsewhereIsNotRemoved() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let elsewhere = sandbox.root.appending(path: "Elsewhere/Chatter.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        sandbox.locations.urls["com.example.chatter"] = [elsewhere]
+        let controller = sandbox.makeController()
+
+        await controller.setEnabled(true)
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(controller.removed.isEmpty)
+        #expect(sandbox.notices.calls.isEmpty)
+    }
+
+    @Test func appFoundOnlyInTheTrashIsRemoved() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([sandbox.indexedApp("Chatter", id: "com.example.chatter")])
+        try sandbox.installApp("Notes", id: "com.example.notes")
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let trashed = sandbox.trash.appending(path: "Chatter.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: trashed, withIntermediateDirectories: true)
+        let gone = sandbox.root.appending(path: "Gone/Chatter.app", directoryHint: .isDirectory)
+        sandbox.locations.urls["com.example.chatter"] = [trashed, gone]
+        let controller = sandbox.makeController()
+
+        await controller.setEnabled(true)
+        sandbox.scheduler.runPending()
+        await controller.pendingWork?.value
+
+        #expect(controller.removed.map(\.id) == ["com.example.chatter"])
+        #expect(sandbox.notices.calls.count == 1)
+    }
+
+    @Test func reportSummary() {
+        let url = URL(filePath: "/L/Caches/com.example.a")
+        let size = ByteCountFormatter.string(fromByteCount: 4096, countStyle: .file)
+        #expect(LeftoverNotice.summary(RemovalReport(removed: [url, url], failed: [], adminCancelled: false, bytes: 4096))
+            == "Moved 2 items (\(size)) to the Trash")
+        #expect(LeftoverNotice.summary(RemovalReport(removed: [url], failed: [url], adminCancelled: false, bytes: 4096))
+            == "Moved 1 item (\(size)) to the Trash. 1 item could not be moved.")
+        #expect(LeftoverNotice.summary(RemovalReport(removed: [url], failed: [url, url, url], adminCancelled: false, bytes: 4096))
+            == "Moved 1 item (\(size)) to the Trash. 3 items could not be moved.")
+        #expect(LeftoverNotice.summary(RemovalReport(removed: [url], failed: [url], adminCancelled: true, bytes: 4096))
+            == "Moved 1 item to the Trash. Items in /Library were left in place.")
     }
 
     @Test func noticeTexts() {

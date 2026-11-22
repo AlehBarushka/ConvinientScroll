@@ -23,8 +23,10 @@ final class ApplicationsWatcher: FolderWatching {
 
         var context = FSEventStreamContext(
             version: 0, info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        let callback: FSEventStreamCallback = { _, info, _, eventPaths, _, _ in
             guard let info else { return }
+            let paths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as? [String] ?? []
+            guard ApplicationsWatcher.canChangeAppList(paths) else { return }
             let watcher = Unmanaged<ApplicationsWatcher>.fromOpaque(info).takeUnretainedValue()
             MainActor.assumeIsolated { watcher.onChange?() }
         }
@@ -45,6 +47,10 @@ final class ApplicationsWatcher: FolderWatching {
         }
         self.stream = stream
         self.onChange = onChange
+    }
+
+    nonisolated static func canChangeAppList(_ paths: [String]) -> Bool {
+        paths.isEmpty || paths.contains { $0.range(of: ".app/", options: .caseInsensitive) == nil }
     }
 
     func stop() {

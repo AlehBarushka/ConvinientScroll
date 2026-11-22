@@ -74,6 +74,32 @@ import Testing
         }
     }
 
+    @Test func sharedEntriesGiveTheSameLeftovers() throws {
+        let notes = InstalledApp(path: "/Applications/Notes.app", bundleID: "com.example.notes", name: "Notes",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        try withLibraries { scanner, user, system in
+            try make(user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 10)
+            try make(user.appending(path: "Caches/com.example.notes"))
+            try make(user.appending(path: "Logs/Chatter"))
+            try make(system.appending(path: "LaunchDaemons/com.example.chatter.helper.plist"), bytes: 10)
+            let installed = [Self.chatter, notes]
+            let entries = scanner.entries()
+            let owners = OwnerIndex(installed)
+            for app in installed {
+                #expect(scanner.leftovers(of: app, in: entries, owners: owners) == scanner.leftovers(of: app, installed: installed))
+            }
+            #expect(scanner.leftovers(of: Self.chatter, in: entries, owners: owners).count == 3)
+        }
+    }
+
+    @Test func orphansSkipAlsoOwnedIDs() throws {
+        try withLibraries { scanner, user, _ in
+            try make(user.appending(path: "Preferences/com.example.toolkit.plist"), bytes: 10)
+            try make(user.appending(path: "Preferences/com.example.oldplayer.plist"), bytes: 10)
+            #expect(scanner.orphans(installed: [], hidden: [], alsoOwned: ["com.example.toolkit"]).map(\.id) == ["com.example.oldplayer"])
+        }
+    }
+
     @Test func sizeDoesNotFollowSymlinkedItem() throws {
         try withLibraries { _, user, _ in
             let target = user.appending(path: "Target")

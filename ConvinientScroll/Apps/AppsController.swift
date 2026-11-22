@@ -12,6 +12,8 @@ struct AppsEnvironment {
     var removal: RemovalEnvironment
     var hasFullDiskAccess: () -> Bool
     var isRunning: (String) -> Bool
+    var appLocations: (String) -> [URL]
+    var ownBundleID: String?
     var now: () -> Date
 
     static func live() -> AppsEnvironment {
@@ -29,6 +31,8 @@ struct AppsEnvironment {
             removal: .live(),
             hasFullDiskAccess: FullDiskAccess.isGranted,
             isRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty },
+            appLocations: { NSWorkspace.shared.urlsForApplications(withBundleIdentifier: $0) },
+            ownBundleID: Bundle.main.bundleIdentifier,
             now: Date.init
         )
     }
@@ -59,6 +63,8 @@ final class AppsController: ObservableObject {
     private let environment: AppsEnvironment
     private var isEnabled = false
     private var tracker: RemovalTracker?
+    private var owners = OwnerIndex([])
+    private var savedIndex: [InstalledApp]?
 
     init(environment: AppsEnvironment) {
         self.environment = environment
@@ -79,33 +85,47 @@ final class AppsController: ObservableObject {
     }
 
     func leftovers(for app: InstalledApp) async -> [LeftoverItem] {
+        await leftovers(for: app, in: librarySnapshot())
+    }
+
+    func librarySnapshot() async -> LibrarySnapshot {
         let library = environment.library(hasFullDiskAccess)
-        let installed = installed
-        return await Task.detached(priority: .utility) {
-            library.leftovers(of: app, installed: installed)
+        let owners = owners
+        let entries = await Task.detached(priority: .utility) { library.entries() }.value
+        return LibrarySnapshot(library: library, entries: entries, owners: owners)
+    }
+
+    func leftovers(for app: InstalledApp, in snapshot: LibrarySnapshot) async -> [LeftoverItem] {
+        await Task.detached(priority: .utility) {
+            snapshot.library.leftovers(of: app, in: snapshot.entries, owners: snapshot.owners)
         }.value
     }
 
     func orphans(hidden: Set<String>) async -> [OrphanGroup] {
         let library = environment.library(hasFullDiskAccess)
         let installed = installed
+        let ownIDs = environment.ownBundleID.map { [$0] } ?? []
         return await Task.detached(priority: .utility) {
-            library.orphans(installed: installed, hidden: hidden)
+            library.orphans(installed: installed, hidden: hidden, alsoOwned: ownIDs)
         }.value
     }
 
     func remove(_ items: [LeftoverItem]) async -> RemovalReport {
         let removal = environment.removal
-        let installed = installed
+        let owners = owners
+        let allowed = items.filter { $0.kind == .cache || $0.kind == .log || !owners.owns($0.entry) }
+        if allowed.count < items.count {
+            AppLog.apps.notice("Skipped \(items.count - allowed.count) items that belong to an installed app")
+        }
         let candidates = removed.map(\.app) + installed
-        let (report, owners) = await Task.detached(priority: .userInitiated) {
-            let owners = candidates.filter { app in
-                items.contains { LeftoverMatcher.match($0.entry, app: app, installed: installed) != nil }
+        let (report, ownerIDs) = await Task.detached(priority: .userInitiated) {
+            let ownerIDs = candidates.filter { app in
+                allowed.contains { LeftoverMatcher.match($0.entry, app: app, owners: owners) != nil }
             }.map(\.bundleID)
-            return (LeftoverRemover.remove(items, environment: removal), owners)
+            return (LeftoverRemover.remove(allowed, environment: removal), ownerIDs)
         }.value
-        log(report, count: items.count, owners: owners)
-        for entry in removed where owners.contains(entry.id) {
+        log(report, count: items.count, owners: ownerIDs)
+        for entry in removed where ownerIDs.contains(entry.id) {
             if await leftovers(for: entry.app).isEmpty { drop(entry.id) }
         }
         return report
@@ -139,8 +159,10 @@ final class AppsController: ObservableObject {
         }.value
         guard isEnabled else { return }
         removed = savedRemoved
-        publish(current)
+        savedIndex = index
         startWatching(known: index ?? current)
+        guard !scanFailed(current) else { return }
+        publish(current)
         tracker?.update(current: current)
         await saveIndex()
     }
@@ -151,22 +173,33 @@ final class AppsController: ObservableObject {
         let current = await Task.detached(priority: .utility) {
             scanner.scan(reusing: previous)
         }.value
-        guard isEnabled else { return }
+        guard isEnabled, !scanFailed(current) else { return }
         publish(current)
         tracker?.update(current: current)
         await saveIndex()
     }
 
+    private func scanFailed(_ current: [InstalledApp]) -> Bool {
+        guard current.isEmpty, let known = tracker?.known, !known.isEmpty else { return false }
+        AppLog.apps.error("App scan found no apps while \(known.count) were known; keeping the previous list")
+        return true
+    }
+
     private func saveIndex() async {
         let store = environment.store
         let apps = installed + (tracker?.pendingApps ?? [])
+        guard apps != savedIndex else { return }
+        savedIndex = apps
         await Task.detached(priority: .utility) {
             store.saveIndex(apps)
         }.value
     }
 
     private func publish(_ current: [InstalledApp]) {
-        installed = current
+        if installed != current {
+            installed = current
+            owners = OwnerIndex(current)
+        }
         let ids = Set(current.map(\.bundleID))
         let kept = removed.filter { !ids.contains($0.id) }
         guard kept.count != removed.count else { return }
@@ -206,9 +239,14 @@ final class AppsController: ObservableObject {
 
     private func handleRemoval(of app: InstalledApp) async {
         guard isEnabled, watchEnabled,
+              app.bundleID != environment.ownBundleID,
               !installed.contains(where: { $0.bundleID == app.bundleID }),
               !removed.contains(where: { $0.id == app.bundleID })
         else { return }
+        if let moved = environment.appLocations(app.bundleID).first(where: isElsewhere) {
+            AppLog.apps.info("\(app.bundleID, privacy: .public) moved to \(moved.path, privacy: .private)")
+            return
+        }
         removed.append(RemovedApp(app: app, removedAt: environment.now()))
         environment.store.saveRemoved(removed)
         let items = await leftovers(for: app)
@@ -224,6 +262,11 @@ final class AppsController: ObservableObject {
             LeftoverNotice.title(name: app.name, size: ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)),
             LeftoverNotice.body(count: items.count, hasService: items.contains { $0.kind == .service })
         )
+    }
+
+    private func isElsewhere(_ url: URL) -> Bool {
+        let trash = environment.removal.userTrash.standardizedFileURL.path + "/"
+        return !url.standardizedFileURL.path.hasPrefix(trash) && environment.removal.exists(url)
     }
 
     private func drop(_ bundleID: String) {

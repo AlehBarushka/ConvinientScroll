@@ -115,7 +115,8 @@ import Testing
         #expect(model.rows.map(\.id) == ["com.example.a", "com.example.b"])
 
         await model.select("com.example.a")
-        #expect(model.checked.count == 2)
+        #expect(model.checked.map(\.lastPathComponent) == ["com.example.a"])
+        model.checked = Set(model.items.map(\.id))
         model.askToTrashChecked()
         #expect(model.pendingRemoval?.count == 2)
         await model.confirmRemoval()
@@ -313,7 +314,7 @@ import Testing
         await model.loadSizes()
         let full = try #require(model.rows.first?.size)
         await model.select("com.example.a")
-        model.checked = model.checked.filter { $0.lastPathComponent == "com.example.a.plist" }
+        model.checked = Set(model.items.map(\.id).filter { $0.lastPathComponent == "com.example.a.plist" })
         model.askToTrashChecked()
 
         await model.confirmRemoval()
@@ -335,6 +336,7 @@ import Testing
         model.section = .orphans
         await model.scanOrphans()
         await model.select("com.example.a")
+        model.checked = Set(model.items.map(\.id))
         model.askToTrashChecked()
 
         let removal = Task { await model.confirmRemoval() }
@@ -412,6 +414,109 @@ import Testing
 
         #expect(controller.installed.count == 2)
         #expect(searches == 0)
+    }
+
+    @Test func orphansStartWithOnlyUserCachesChecked() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([])
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.a.plist"), bytes: 4096)
+        try sandbox.writeFile(sandbox.user.appending(path: "Caches/com.example.a/data.bin"), bytes: 4096)
+        try sandbox.writeFile(sandbox.system.appending(path: "Caches/com.example.a.system/data.bin"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        model.section = .orphans
+        await model.scanOrphans()
+
+        await model.select("com.example.a")
+
+        #expect(model.items.count == 3)
+        #expect(model.checked.map(\.lastPathComponent) == ["com.example.a"])
+    }
+
+    @Test func orphansOfANewlyInstalledAppDisappear() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([])
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.a.plist"), bytes: 4096)
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.b.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        model.section = .orphans
+        await model.scanOrphans()
+        await model.select("com.example.a")
+
+        try sandbox.installApp("A", id: "com.example.a")
+        await controller.refreshInstalled()
+        await model.pendingSync?.value
+
+        #expect(model.orphans?.map(\.id) == ["com.example.b"])
+        #expect(model.selectedID == "com.example.b")
+    }
+
+    @Test func pendingRemovalIsDroppedWhenTheRowVanishes() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        sandbox.store.saveIndex([])
+        let plist = sandbox.user.appending(path: "Preferences/com.example.a.plist")
+        try sandbox.writeFile(plist, bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        model.section = .orphans
+        await model.scanOrphans()
+        await model.select("com.example.a")
+        model.checked = Set(model.items.map(\.id))
+        model.askToTrashChecked()
+        #expect(model.pendingRemoval?.count == 1)
+
+        try sandbox.installApp("A", id: "com.example.a")
+        await controller.refreshInstalled()
+        await model.pendingSync?.value
+        #expect(model.pendingRemoval == nil)
+        await model.confirmRemoval()
+
+        #expect(FileManager.default.fileExists(atPath: plist.path))
+        #expect(model.lastReport == nil)
+    }
+
+    @Test func pendingRemovalIsDroppedWhenTheSectionChanges() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        _ = try removedChatter(sandbox)
+        try sandbox.writeFile(sandbox.user.appending(path: "Preferences/com.example.chatter.plist"), bytes: 4096)
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        model.section = .removed
+        await model.select("com.example.chatter")
+        model.askToTrashChecked()
+        #expect(model.pendingRemoval?.count == 1)
+
+        model.section = .orphans
+
+        #expect(model.pendingRemoval == nil)
+    }
+
+    @Test func sizesListTheLibraryOncePerPass() async throws {
+        let sandbox = try Sandbox()
+        defer { sandbox.cleanUp() }
+        for name in ["Alpha", "Bravo", "Charlie"] {
+            try sandbox.installApp(name, id: "com.example.\(name.lowercased())")
+            try sandbox.writeFile(sandbox.user.appending(path: "Caches/com.example.\(name.lowercased())/data.bin"), bytes: 4096)
+        }
+        let controller = sandbox.makeController()
+        await controller.setEnabled(true)
+        let model = AppsModel(controller: controller, settings: freshSettings())
+        var searches = 0
+        sandbox.searchHook.beforeSearch = { searches += 1 }
+
+        await model.loadSizes()
+
+        #expect(searches == 1)
+        #expect(model.rows.allSatisfy { ($0.size ?? 0) >= 4096 })
     }
 
     @Test func firstRowIsSelectedWhenRowsAppear() async throws {

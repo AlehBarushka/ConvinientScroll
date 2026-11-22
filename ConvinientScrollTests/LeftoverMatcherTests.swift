@@ -63,6 +63,61 @@ import Testing
         #expect(LeftoverMatcher.match(prefs, app: foo, installed: [pro]) == nil)
         #expect(LeftoverMatcher.match(prefs, app: foo, installed: []) == .bundleID)
     }
+    @Test func indexedLookupKeepsTheMatchingRules() {
+        let pro = InstalledApp(path: "/Applications/Chatter Pro.app", bundleID: "com.example.chatter.pro", name: "Chatter Pro",
+            executable: nil, version: nil, teamID: "FGHIJ67890", nestedBundleIDs: [], infoPlistModified: .distantPast)
+        let installed = [Self.chatter, pro]
+        let owners = OwnerIndex(installed)
+        let cases: [(LibraryEntry, MatchKind?)] = [
+            (entry(.preferences, "com.example.chatter.plist"), .bundleID),
+            (entry(.caches, "COM.EXAMPLE.CHATTER.ShipIt"), .bundleID),
+            (entry(.launchAgents, "com.example.chatter.helper.plist"), .bundleID),
+            (entry(.groupContainers, "group.com.example.chatter"), .bundleID),
+            (entry(.groupContainers, "group.com.example.chatter.shared"), .bundleID),
+            (entry(.groupContainers, "ABCDE12345.com.example.shared"), .teamID),
+            (entry(.groupContainers, "FGHIJ67890.com.example.shared"), nil),
+            (entry(.preferences, "com.apple.chatter.plist"), nil),
+            (entry(.groupContainers, "group.com.apple.chatter"), nil),
+            (entry(.caches, "com.example.chatter.pro"), nil),
+            (entry(.caches, "com.example.chatter.pro.cache"), nil),
+            (entry(.groupContainers, "group.com.example.chatter.pro"), nil),
+            (entry(.applicationSupport, "Chatter Desktop"), .name),
+            (entry(.applicationSupport, "Chatter Pro"), nil),
+            (entry(.caches, "com.example.chatterbox"), nil),
+        ]
+        for (entry, expected) in cases {
+            #expect(LeftoverMatcher.match(entry, app: Self.chatter, owners: owners) == expected, "\(entry.name)")
+            #expect(LeftoverMatcher.match(entry, app: Self.chatter, installed: installed) == expected, "\(entry.name)")
+        }
+    }
+    @Test func appleAppsAreNotMatchedByName() {
+        let music = InstalledApp(path: "/Applications/Musical.app", bundleID: "com.apple.musical", name: "Musical",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        #expect(LeftoverMatcher.match(entry(.applicationSupport, "Musical"), app: music, installed: [music]) == nil)
+        #expect(LeftoverMatcher.match(entry(.caches, "Musical"), app: music, installed: [music]) == nil)
+    }
+    @Test func groupContainerOfASharedTeamIsNotOffered() {
+        let group = entry(.groupContainers, "group.com.example.chatter")
+        #expect(LeftoverMatcher.match(group, app: Self.chatter, installed: [Self.chatter]) == .bundleID)
+        #expect(LeftoverMatcher.match(group, app: Self.chatter, installed: [Self.chatter, Self.sibling]) == nil)
+        #expect(LeftoverMatcher.match(entry(.preferences, "group.com.example.chatter.plist"), app: Self.chatter,
+                                      installed: [Self.chatter, Self.sibling]) == .bundleID)
+        #expect(LeftoverMatcher.match(entry(.groupContainers, "com.example.chatter"), app: Self.chatter,
+                                      installed: [Self.chatter, Self.sibling]) == .bundleID)
+    }
+    @Test func ownershipCoversBundleAndTeamRules() {
+        let foo = InstalledApp(path: "/Applications/Foo.app", bundleID: "com.example.foo", name: "Foo", executable: nil,
+            version: nil, teamID: "ABCDE12345", nestedBundleIDs: ["com.example.foo.agent"], infoPlistModified: .distantPast)
+        let owners = OwnerIndex([foo])
+        #expect(owners.owns(entry(.preferences, "com.example.foo.plist")))
+        #expect(owners.owns(entry(.launchAgents, "com.example.foo.agent.plist")))
+        #expect(owners.owns(entry(.groupContainers, "group.com.example.foo.data")))
+        #expect(owners.owns(entry(.groupContainers, "ABCDE12345.com.example.other")))
+        #expect(owners.owns(entry(.groupContainers, "FGHIJ67890.com.example.foo")))
+        #expect(owners.owns(entry(.containers, "ABCDE12345.com.example.other")) == false)
+        #expect(owners.owns(entry(.preferences, "com.example.food.plist")) == false)
+        #expect(OwnerIndex([], alsoOwned: ["com.example.foo"]).owns(entry(.caches, "com.example.foo.ShipIt")))
+    }
     @Test func entryIDStripping() {
         #expect(LeftoverMatcher.entryID("group.com.example.shared", folder: .groupContainers) == "com.example.shared")
         #expect(LeftoverMatcher.entryID("com.example.tool.0123ABCD-4567-89AB-CDEF-0123456789AB.plist", folder: .preferencesByHost) == "com.example.tool")

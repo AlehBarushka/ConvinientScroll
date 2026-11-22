@@ -61,6 +61,10 @@ struct Notice: Equatable {
     var granted = true
 }
 
+@MainActor final class AppLocations {
+    var urls: [String: [URL]] = [:]
+}
+
 @MainActor final class SearchHook {
     var beforeSearch: (() -> Void)?
 }
@@ -73,10 +77,13 @@ struct Notice: Equatable {
     let searchHook = SearchHook()
     let running = RunningApps()
     let access = AccessState()
+    let locations = AppLocations()
+    let ownBundleID = "com.example.toolkit"
 
     var apps: URL { root.appending(path: "Applications", directoryHint: .isDirectory) }
     var user: URL { root.appending(path: "User", directoryHint: .isDirectory) }
     var system: URL { root.appending(path: "System", directoryHint: .isDirectory) }
+    var trash: URL { root.appending(path: "Trash", directoryHint: .isDirectory) }
     var store: AppsStore { AppsStore(root: root.appending(path: "Store", directoryHint: .isDirectory)) }
 
     init() throws {
@@ -88,7 +95,8 @@ struct Notice: Equatable {
     func cleanUp() { try? FileManager.default.removeItem(at: root) }
 
     func makeController() -> AppsController {
-        let user = user, system = system, notices = notices, searchHook = searchHook, running = running, access = access
+        let user = user, system = system, notices = notices, searchHook = searchHook, running = running, access = access,
+            locations = locations
         return AppsController(environment: AppsEnvironment(
             store: store,
             scanner: AppScanner(roots: [apps], teamID: { _ in nil }),
@@ -104,10 +112,12 @@ struct Notice: Equatable {
                 bootoutUser: { _ in },
                 runPrivileged: { _ throws(PrivilegedError) in },
                 exists: { FileManager.default.fileExists(atPath: $0.path) },
-                userTrash: root.appending(path: "Trash", directoryHint: .isDirectory),
+                userTrash: trash,
                 now: { Date(timeIntervalSince1970: 0) }),
             hasFullDiskAccess: { access.granted },
             isRunning: { running.ids.contains($0) },
+            appLocations: { locations.urls[$0] ?? [] },
+            ownBundleID: ownBundleID,
             now: { Date(timeIntervalSince1970: 1_000) }
         ))
     }
