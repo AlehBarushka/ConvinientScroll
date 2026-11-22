@@ -20,13 +20,13 @@ fail() { echo "error: $*" >&2; exit 1; }
 
 while getopts "n:d:" opt; do
   case "$opt" in
-    n) NOTE="$OPTARG" ;;
+    n) NOTE="${OPTARG//|//}" ;;
     d) DURATION="$OPTARG" ;;
     *) usage ;;
   esac
 done
 [[ -n "$NOTE" ]] || usage
-[[ "$DURATION" =~ ^[0-9]+$ && "$DURATION" -ge 10 ]] || fail "duration must be at least 10 seconds"
+[[ "$DURATION" =~ ^[1-9][0-9]*$ && "$DURATION" -ge 10 ]] || fail "duration must be at least 10 seconds"
 
 PIDS=($(pgrep -x "$APP_NAME" || true))
 [[ ${#PIDS[@]} -eq 1 ]] || fail "expected exactly one running $APP_NAME, found ${#PIDS[@]}"
@@ -48,7 +48,7 @@ if [[ "$KIND" == "installed" ]]; then
   COMMIT="release"
 else
   COMMIT="$(git -C "$ROOT" rev-parse --short HEAD)"
-  git -C "$ROOT" diff --quiet HEAD -- ConvinientScroll || COMMIT="$COMMIT+dirty"
+  [[ -z "$(git -C "$ROOT" status --porcelain -- ConvinientScroll ConvinientScroll.xcodeproj)" ]] || COMMIT="$COMMIT+dirty"
 fi
 
 module() {
@@ -67,18 +67,21 @@ cpu_seconds() {
 
 echo "Measuring $APP_NAME $VERSION ($KIND, pid $PID) for $DURATION s: $NOTE"
 SAMPLES="$(mktemp)"
-trap 'rm -f "$SAMPLES"' EXIT
+trap 'rm -f "$SAMPLES" "$SAMPLES.pmset"' EXIT
 
 caffeinate -d -i -w $$ &
 WINDOW_START="$(date '+%Y-%m-%d %H:%M:%S')"
 CPU_START="$(cpu_seconds)"
 top -l $((DURATION + 1)) -s 1 -pid "$PID" -stats pid,idlew,power \
   | awk -v pid="$PID" '$1 == pid { gsub(/\+/, ""); print $2, $3 }' > "$SAMPLES"
-CPU_END="$(cpu_seconds)"
 kill -0 "$PID" 2>/dev/null || fail "$APP_NAME exited during the measurement"
+CPU_END="$(cpu_seconds)"
 WINDOW_END="$(date '+%Y-%m-%d %H:%M:%S')"
-PAUSED="$(pmset -g log | awk -v from="$WINDOW_START" -v to="$WINDOW_END" '
-  /Display is turned off|Entering Sleep|[[:space:]]Sleep[[:space:]]/ { t = $1 " " $2; if (t >= from && t <= to) { print t; exit } }')"
+pmset -g log > "$SAMPLES.pmset"
+PAUSED="$(awk -v from="$WINDOW_START" -v to="$WINDOW_END" '
+  /Display is turned off|Entering Sleep|^[0-9-]+ [0-9:]+ [+-][0-9]+ Sleep[[:space:]]/ {
+    t = $1 " " $2; if (t >= from && t <= to && found == "") found = t }
+  END { print found }' "$SAMPLES.pmset")"
 [[ -z "$PAUSED" ]] || fail "the display turned off or the Mac slept at $PAUSED; the timers were paused, run it again"
 
 read -r WAKEUPS POWER < <(awk -v d="$DURATION" '
