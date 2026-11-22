@@ -12,6 +12,11 @@ nonisolated enum ThermalText {
         return parts.joined(separator: " · ")
     }
 
+    static func statistics(_ durations: [LevelDuration]) -> String {
+        let parts = durations.map { "\($0.level.title) \(duration($0.seconds))" }
+        return "Since enabled: " + (parts.isEmpty ? "—" : parts.joined(separator: " · "))
+    }
+
     static func duration(_ seconds: TimeInterval) -> String {
         let total = Int(seconds)
         if total < 60 { return "\(total)s" }

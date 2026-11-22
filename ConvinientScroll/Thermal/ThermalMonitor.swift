@@ -43,7 +43,7 @@ final class ThermalMonitor {
         isEnabled = enabled
         if enabled {
             statistics.start(level: display.level, at: now())
-            if !pauseReasons.isEmpty { statistics.pause(at: now()) }
+            if pauseReasons.contains(.systemSleep) { statistics.pause(at: now()) }
             resumeIfPossible()
         } else {
             stopReading()
@@ -58,15 +58,15 @@ final class ThermalMonitor {
     func setPaused(_ paused: Bool, for reason: PauseReason) {
         if paused {
             let wasRunning = pauseReasons.isEmpty
-            pauseReasons.insert(reason)
-            guard wasRunning, isEnabled else { return }
+            guard pauseReasons.insert(reason).inserted, isEnabled else { return }
+            if reason == .systemSleep { statistics.pause(at: now()) }
+            guard wasRunning else { return }
             stopReading()
             history.breakLine()
-            statistics.pause(at: now())
         } else {
-            guard pauseReasons.remove(reason) != nil, pauseReasons.isEmpty, isEnabled else { return }
-            statistics.resume(at: now())
-            resumeIfPossible()
+            guard pauseReasons.remove(reason) != nil, isEnabled else { return }
+            if reason == .systemSleep { statistics.resume(at: now()) }
+            if pauseReasons.isEmpty { resumeIfPossible() }
         }
     }
 

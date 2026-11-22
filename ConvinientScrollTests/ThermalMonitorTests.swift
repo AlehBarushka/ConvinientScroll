@@ -185,6 +185,30 @@ struct ThermalMonitorTests {
         #expect(h.alerts == [.heavy])
     }
 
+    @Test func statisticsKeepCountingWhileTheDisplayIsOff() {
+        let h = Harness()
+        h.monitor.levelChanged(.heavy)
+        h.monitor.setEnabled(true)
+        h.clock += 10
+        h.monitor.setPaused(true, for: .displaySleep)
+        h.clock += 90
+
+        #expect(h.monitor.statistics.durations(at: h.clock) == [LevelDuration(level: .heavy, seconds: 100)])
+    }
+
+    @Test func statisticsStopWhileTheMacSleeps() {
+        let h = Harness()
+        h.monitor.levelChanged(.nominal)
+        h.monitor.setEnabled(true)
+        h.clock += 10
+        h.monitor.setPaused(true, for: .systemSleep)
+        h.clock += 90
+        h.monitor.setPaused(false, for: .systemSleep)
+        h.clock += 30
+
+        #expect(h.monitor.statistics.durations(at: h.clock) == [LevelDuration(level: .nominal, seconds: 40)])
+    }
+
     @Test func disablingClearsHistoryAndStatistics() {
         let h = Harness()
         h.monitor.levelChanged(.nominal)

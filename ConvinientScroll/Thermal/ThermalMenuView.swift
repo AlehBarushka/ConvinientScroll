@@ -2,6 +2,13 @@ import Charts
 import Combine
 import SwiftUI
 
+nonisolated enum ThermalChartScale {
+    static func top(for points: [ThermalPoint]) -> Double {
+        let hottest = points.compactMap(\.celsius).max() ?? 0
+        return max(110, (hottest / 10).rounded(.up) * 10)
+    }
+}
+
 final class ThermalMenuModel: ObservableObject {
     @Published var detail = ""
     @Published var points: [ThermalPoint] = []
@@ -25,10 +32,10 @@ struct ThermalMenuView: View {
                 .foregroundStyle(.secondary)
             chart
                 .frame(height: 120)
-            Text(statistics)
+            Text(ThermalText.statistics(model.durations))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2, reservesSpace: true)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
@@ -42,7 +49,7 @@ struct ThermalMenuView: View {
                     xStart: .value("Start", band.start),
                     xEnd: .value("End", band.end),
                     yStart: .value("Bottom", 0),
-                    yEnd: .value("Top", 110)
+                    yEnd: .value("Top", chartTop)
                 )
                 .foregroundStyle(Self.bandColor(band.level))
             }
@@ -65,13 +72,17 @@ struct ThermalMenuView: View {
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
         }
-        .chartYScale(domain: 0...110)
+        .chartYScale(domain: 0...chartTop)
         .chartXScale(domain: timeDomain)
         .chartXAxis(.hidden)
         .chartYAxis {
             AxisMarks(position: .leading, values: [0, 50, 100])
         }
         .chartLegend(.hidden)
+    }
+
+    private var chartTop: Double {
+        ThermalChartScale.top(for: model.points)
     }
 
     private var hasFan: Bool {
@@ -102,11 +113,6 @@ struct ThermalMenuView: View {
             index = last + 1
         }
         return bands
-    }
-
-    private var statistics: String {
-        let parts = model.durations.map { "\($0.level.title) \(ThermalText.duration($0.seconds))" }
-        return "Since enabled: " + (parts.isEmpty ? "—" : parts.joined(separator: " · "))
     }
 
     private static func bandColor(_ level: ThermalLevel) -> Color {

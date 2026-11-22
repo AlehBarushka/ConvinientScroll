@@ -1,8 +1,7 @@
 import Foundation
 import OSLog
 
-// Not thread-safe on purpose: ThermalController calls it only from its own serial queue.
-nonisolated final class ThermalSampler: @unchecked Sendable {
+nonisolated final class ThermalSampler {
     private let primary: () -> CPUTemperatureSource?
     private let fallback: () -> CPUTemperatureSource?
     private let fan: () -> Int?
