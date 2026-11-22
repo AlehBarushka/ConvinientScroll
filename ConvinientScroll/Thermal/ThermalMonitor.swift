@@ -136,3 +136,16 @@ final class ThermalMonitor {
         onDisplayChange?(next)
     }
 }
+
+extension ThermalMonitor.Display {
+    var segment: MenuBarSegment {
+        let text = ThermalText.menuBar(celsius: celsius)
+        return MenuBarSegment(
+            symbol: "thermometer.medium",
+            text: text,
+            reservedCharacters: 4,
+            tint: level?.tint ?? MenuBarTint.none,
+            accessibility: "CPU \(text), thermal pressure \(level?.title.lowercased() ?? "unknown")"
+        )
+    }
+}

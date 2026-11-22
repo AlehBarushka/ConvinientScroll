@@ -65,3 +65,13 @@ enum MemoryPressure: Equatable {
         }
     }
 }
+
+extension MemoryPressure {
+    var tint: MenuBarTint {
+        switch self {
+        case .normal: .none
+        case .warning: .warning
+        case .critical: .critical
+        }
+    }
+}

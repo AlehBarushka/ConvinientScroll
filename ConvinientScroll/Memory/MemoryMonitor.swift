@@ -94,3 +94,16 @@ final class MemoryMonitor {
         onDisplayChange?(next)
     }
 }
+
+extension MemoryMonitor.Display {
+    var segment: MenuBarSegment {
+        let text = percent.map { "\($0)%" } ?? "—%"
+        return MenuBarSegment(
+            symbol: "memorychip",
+            text: text,
+            reservedCharacters: 4,
+            tint: pressure.tint,
+            accessibility: "\(text) memory used, pressure \(pressure.title.lowercased())"
+        )
+    }
+}
