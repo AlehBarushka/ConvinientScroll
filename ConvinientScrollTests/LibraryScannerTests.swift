@@ -73,4 +73,15 @@ import Testing
             #expect(groups.map(\.id) == ["com.example.oldplayer"])
         }
     }
+
+    @Test func sizeDoesNotFollowSymlinkedItem() throws {
+        try withLibraries { _, user, _ in
+            let target = user.appending(path: "Target")
+            try make(target.appending(path: "big.bin"), bytes: 8192)
+            let link = user.appending(path: "Caches/com.example.chatter")
+            try make(link.deletingLastPathComponent())
+            try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+            #expect(LibraryScanner.size(of: link) < 8192)
+        }
+    }
 }
