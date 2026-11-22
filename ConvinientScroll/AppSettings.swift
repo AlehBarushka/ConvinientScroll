@@ -9,6 +9,8 @@ final class AppSettings: ObservableObject {
         static let shelfEnabled = "modules.shelf.enabled"
         static let shelfRetention = "shelf.retention"
         static let memoryEnabled = "modules.memory.enabled"
+        static let thermalEnabled = "modules.thermal.enabled"
+        static let thermalAlertsEnabled = "thermal.alerts.enabled"
     }
 
     /// How long a file stays on the shelf, counted from the moment it was added.
@@ -61,6 +63,14 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(memoryEnabled, forKey: Key.memoryEnabled) }
     }
 
+    @Published var thermalEnabled: Bool {
+        didSet { defaults.set(thermalEnabled, forKey: Key.thermalEnabled) }
+    }
+
+    @Published var thermalAlertsEnabled: Bool {
+        didSet { defaults.set(thermalAlertsEnabled, forKey: Key.thermalAlertsEnabled) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -69,12 +79,16 @@ final class AppSettings: ObservableObject {
             Key.autoScrollEnabled: true,
             Key.shelfEnabled: true,
             Key.shelfRetention: ShelfRetention.oneDay.rawValue,
-            Key.memoryEnabled: false
+            Key.memoryEnabled: false,
+            Key.thermalEnabled: false,
+            Key.thermalAlertsEnabled: true
         ])
         autoScrollEnabled = defaults.bool(forKey: Key.autoScrollEnabled)
         shelfEnabled = defaults.bool(forKey: Key.shelfEnabled)
         shelfRetention = defaults.string(forKey: Key.shelfRetention)
             .flatMap(ShelfRetention.init(rawValue:)) ?? .oneDay
         memoryEnabled = defaults.bool(forKey: Key.memoryEnabled)
+        thermalEnabled = defaults.bool(forKey: Key.thermalEnabled)
+        thermalAlertsEnabled = defaults.bool(forKey: Key.thermalAlertsEnabled)
     }
 }

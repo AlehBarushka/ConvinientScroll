@@ -10,7 +10,7 @@ import AppKit
 
 struct SettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case general, scroll, shelf, memory
+        case general, scroll, shelf, memory, thermal
 
         var id: String { rawValue }
 
@@ -20,6 +20,7 @@ struct SettingsView: View {
             case .scroll: "Scrolling"
             case .shelf: "File Shelf"
             case .memory: "Memory"
+            case .thermal: "Temperature"
             }
         }
 
@@ -29,6 +30,7 @@ struct SettingsView: View {
             case .scroll: "computermouse"
             case .shelf: "tray.full"
             case .memory: "memorychip"
+            case .thermal: "thermometer.medium"
             }
         }
     }
@@ -49,6 +51,7 @@ struct SettingsView: View {
                 case .scroll: ScrollSettings()
                 case .shelf: ShelfSettings()
                 case .memory: MemorySettings()
+                case .thermal: ThermalSettings()
                 }
             }
             .formStyle(.grouped)
@@ -219,6 +222,22 @@ private struct MemorySettings: View {
                 Toggle("Show memory usage in the menu bar", isOn: $settings.memoryEnabled)
             } footer: {
                 Text("Shows the share of RAM in use, counted as in Activity Monitor. It updates every 2 seconds and pauses while the display is off. The number turns yellow or red when macOS reports memory pressure.")
+            }
+        }
+    }
+}
+
+private struct ThermalSettings: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Show CPU temperature in the menu bar", isOn: $settings.thermalEnabled)
+                Toggle("Notify when the Mac is throttling", isOn: $settings.thermalAlertsEnabled)
+                    .disabled(!settings.thermalEnabled)
+            } footer: {
+                Text("Shows the hottest CPU sensor. It updates every 2 seconds and pauses while the display is off. The number turns yellow or red when macOS slows the Mac down to cool it.")
             }
         }
     }

@@ -42,6 +42,7 @@ final class AppServices {
     private var autoNaturalScroll: AutoNaturalScrollController?
     private var shelf: ShelfController?
     private var memory: MemoryController?
+    private var thermal: ThermalController?
     private var settingsWindow: SettingsWindowController?
     private var updateWindow: UpdateWindowController?
     private var cancellables = Set<AnyCancellable>()
@@ -65,6 +66,7 @@ final class AppServices {
 
         startShelf()
         startMemory()
+        startThermal()
         reportPreviousUpdate()
 
         if statusBar == nil {
@@ -103,6 +105,20 @@ final class AppServices {
         let controller = MemoryController()
         memory = controller
         settings.$memoryEnabled
+            .removeDuplicates()
+            .sink { controller.setEnabled($0) }
+            .store(in: &cancellables)
+    }
+
+    private func startThermal() {
+        guard thermal == nil else { return }
+        let controller = ThermalController()
+        thermal = controller
+        settings.$thermalAlertsEnabled
+            .removeDuplicates()
+            .sink { controller.alertsEnabled = $0 }
+            .store(in: &cancellables)
+        settings.$thermalEnabled
             .removeDuplicates()
             .sink { controller.setEnabled($0) }
             .store(in: &cancellables)
@@ -220,6 +236,28 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
                 AppLog.ui.error("Cannot deliver notification: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    func showThrottling(_ alert: ThrottleAlert) {
+        let content = UNMutableNotificationContent()
+        let identifier: String
+        switch alert {
+        case .heavy:
+            identifier = "thermal-heavy"
+            content.title = "Mac is throttling"
+            content.body = "Thermal pressure is Heavy. macOS is slowing the CPU to cool down."
+        case .critical:
+            identifier = "thermal-critical"
+            content.title = "Mac is throttling heavily"
+            content.body = "Thermal pressure is Critical. Performance is strongly reduced."
+        }
+
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                AppLog.thermal.error("Cannot deliver notification: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
