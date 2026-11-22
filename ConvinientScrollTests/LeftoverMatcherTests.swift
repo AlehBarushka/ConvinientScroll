@@ -54,4 +54,23 @@ import Testing
         #expect(LeftoverItem.make(entry(.applicationSupport, "Chatter"), match: .name, canReadProtected: true).isSelectedByDefault == false)
         #expect(LeftoverItem.make(entry(.launchDaemons, "com.example.chatter.helper.plist", .system), match: .bundleID, canReadProtected: false).needsAdmin)
     }
+    @Test func entryOwnedByAnotherInstalledAppIsNeverOffered() {
+        let foo = InstalledApp(path: "/Applications/Foo.app", bundleID: "com.example.foo", name: "Foo",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        let pro = InstalledApp(path: "/Applications/Foo Pro.app", bundleID: "com.example.foo.pro", name: "Foo Pro",
+            executable: nil, version: nil, teamID: nil, nestedBundleIDs: [], infoPlistModified: .distantPast)
+        let prefs = entry(.preferences, "com.example.foo.pro.plist")
+        #expect(LeftoverMatcher.match(prefs, app: foo, installed: [pro]) == nil)
+        #expect(LeftoverMatcher.match(prefs, app: foo, installed: []) == .bundleID)
+    }
+    @Test func entryIDStripping() {
+        #expect(LeftoverMatcher.entryID("group.com.example.shared", folder: .groupContainers) == "com.example.shared")
+        #expect(LeftoverMatcher.entryID("com.example.tool.0123ABCD-4567-89AB-CDEF-0123456789AB.plist", folder: .preferencesByHost) == "com.example.tool")
+        #expect(LeftoverMatcher.entryID("com.example.tool.savedState", folder: .savedState) == "com.example.tool")
+        #expect(LeftoverMatcher.entryID("com.example.tool.binarycookies", folder: .cookies) == "com.example.tool")
+        #expect(LeftoverMatcher.entryID("com.example.tool.PLIST", folder: .preferences) == "com.example.tool")
+        #expect(LeftoverMatcher.entryID("com.example.SAVEDSTATE", folder: .savedState) == nil)
+        #expect(LeftoverMatcher.entryID("example.tool.plist", folder: .preferences) == nil)
+        #expect(LeftoverMatcher.entryID("group.example", folder: .groupContainers) == nil)
+    }
 }
