@@ -37,9 +37,22 @@ final class AppsModel: ObservableObject {
     @Published private(set) var hasFullDiskAccess: Bool
     @Published var pendingRemoval: [LeftoverItem]?
     @Published private(set) var lastReport: RemovalReport?
-    @Published private var sizes: [String: Int64] = [:]
+    @Published private(set) var isRemoving = false
+    @Published private var sizes: [SizeKey: Int64] = [:]
 
     private(set) var pendingLoad: Task<Void, Never>?
+    private(set) var pendingSync: Task<Void, Never>?
+    private var sizesRequested = false
+    private struct SizeKey: Hashable {
+        var section: AppsSection
+        var id: String
+    }
+
+    private struct Entry {
+        var row: AppsRow
+        var searchKeys: [String]
+    }
+
     private let controller: AppsController
     private let settings: AppSettings
     private var forwarding: Set<AnyCancellable> = []
@@ -51,17 +64,27 @@ final class AppsModel: ObservableObject {
         controller.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &forwarding)
+        controller.$installed.dropFirst()
+            .sink { [weak self] _ in self?.scheduleSync() }
+            .store(in: &forwarding)
+        controller.$removed.dropFirst()
+            .sink { [weak self] _ in self?.scheduleSync() }
+            .store(in: &forwarding)
     }
 
     var rows: [AppsRow] {
-        let all = allRows().filter {
-            query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query)
+        let matching = allEntries().filter { entry in
+            query.isEmpty || entry.searchKeys.contains { $0.localizedCaseInsensitiveContains(query) }
         }
+        return Self.sorted(matching.map(\.row), by: sort)
+    }
+
+    nonisolated static func sorted(_ rows: [AppsRow], by sort: AppsSort) -> [AppsRow] {
         switch sort {
         case .name:
-            return all.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            return rows.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         case .size:
-            return all.sorted { lhs, rhs in
+            return rows.sorted { lhs, rhs in
                 switch (lhs.size, rhs.size) {
                 case let (left?, right?) where left != right: left > right
                 case (_?, nil): true
@@ -83,12 +106,13 @@ final class AppsModel: ObservableObject {
     }
 
     func select(_ id: String?) async {
+        let started = section
         selectedID = id
         items = []
         checked = []
         guard let id else { return }
         let loaded = await loadItems(for: id)
-        guard selectedID == id else { return }
+        guard selectedID == id, section == started else { return }
         apply(loaded)
     }
 
@@ -98,26 +122,40 @@ final class AppsModel: ObservableObject {
     }
 
     func askToTrashChecked() {
-        let chosen = items.filter { checked.contains($0.id) }
+        guard section != .installed else { return }
+        let chosen = items.filter { checked.contains($0.id) && $0.isAccessible }
         pendingRemoval = chosen.isEmpty ? nil : chosen
     }
 
     func askToClean() {
-        let chosen = cleanableItems()
-        pendingRemoval = chosen.isEmpty ? nil : chosen
+        guard canClean else { return }
+        pendingRemoval = cleanableItems()
     }
 
     func confirmRemoval() async {
-        guard let confirmed = pendingRemoval else { return }
+        guard !isRemoving, let requested = pendingRemoval else { return }
         pendingRemoval = nil
-        let before = rows
+        let confirmed = validated(requested)
+        guard !confirmed.isEmpty else { return }
+        let startedSection = section
         let id = selectedID
+        let before = rows
+        isRemoving = true
         lastReport = await controller.remove(confirmed)
-        if let id { sizes[id] = nil }
-        if section == .orphans {
+        isRemoving = false
+        if let id { sizes[SizeKey(section: startedSection, id: id)] = nil }
+        if startedSection == .orphans {
             orphans = await controller.orphans(hidden: Set(settings.appsHiddenIDs))
         }
-        await reload(after: before, selected: id)
+        if section == startedSection, selectedID == id, let id {
+            if allEntries().contains(where: { $0.row.id == id }) {
+                await select(id)
+            } else {
+                moveSelection(after: before, from: id)
+                await pendingLoad?.value
+            }
+        }
+        await refreshSizes()
     }
 
     func keepSelected() {
@@ -147,17 +185,54 @@ final class AppsModel: ObservableObject {
     }
 
     func refreshAccess() {
-        hasFullDiskAccess = controller.hasFullDiskAccess
+        let granted = controller.hasFullDiskAccess
+        guard granted != hasFullDiskAccess else { return }
+        hasFullDiskAccess = granted
+        let id = selectedID
+        let previous = pendingLoad
+        pendingLoad = Task {
+            await previous?.value
+            if self.section == .orphans, self.orphans != nil { await self.scanOrphans() }
+            guard self.selectedID == id else { return }
+            await self.select(id)
+        }
     }
 
     func loadSizes() async {
+        sizesRequested = true
         let current = section
-        for row in rows where sizes[row.id] == nil {
+        for entry in allEntries() where sizes[SizeKey(section: current, id: entry.row.id)] == nil {
             guard section == current else { return }
-            guard let size = await size(of: row.id) else { continue }
+            guard let size = await size(of: entry.row.id) else { continue }
             guard section == current else { return }
-            sizes[row.id] = size
+            sizes[SizeKey(section: current, id: entry.row.id)] = size
         }
+    }
+
+    private func refreshSizes() async {
+        if sizesRequested { await loadSizes() }
+    }
+
+    private func scheduleSync() {
+        let previous = pendingSync
+        pendingSync = Task {
+            await previous?.value
+            await self.syncWithController()
+        }
+    }
+
+    private func syncWithController() async {
+        if let id = selectedID, !allEntries().contains(where: { $0.row.id == id }) {
+            await select(rows.first?.id)
+        }
+        await refreshSizes()
+    }
+
+    private func validated(_ items: [LeftoverItem]) -> [LeftoverItem] {
+        let accessible = items.filter(\.isAccessible)
+        guard section == .installed else { return accessible }
+        if let app = selectedApp, controller.isRunning(app) { return [] }
+        return accessible.filter { $0.kind == .cache || $0.kind == .log }
     }
 
     private var selectedApp: InstalledApp? {
@@ -173,22 +248,32 @@ final class AppsModel: ObservableObject {
         }
     }
 
-    private func allRows() -> [AppsRow] {
+    private func allEntries() -> [Entry] {
         switch section {
         case .installed:
             controller.installed.map { app in
-                AppsRow(
-                    id: app.path, title: app.name,
-                    subtitle: controller.isRunning(app) ? "Running · \(app.folder)" : app.folder,
-                    size: sizes[app.path])
+                Entry(
+                    row: AppsRow(
+                        id: app.path, title: app.name,
+                        subtitle: controller.isRunning(app) ? "Running · \(app.folder)" : app.folder,
+                        size: sizes[SizeKey(section: .installed, id: app.path)]),
+                    searchKeys: [app.name, app.bundleID])
             }
         case .removed:
             controller.removed.map { entry in
                 let when = RelativeDateTimeFormatter().localizedString(for: entry.removedAt, relativeTo: Date())
-                return AppsRow(id: entry.id, title: entry.app.name, subtitle: "Removed \(when)", size: sizes[entry.id])
+                return Entry(
+                    row: AppsRow(
+                        id: entry.id, title: entry.app.name, subtitle: "Removed \(when)",
+                        size: sizes[SizeKey(section: .removed, id: entry.id)]),
+                    searchKeys: [entry.app.name, entry.id])
             }
         case .orphans:
-            (orphans ?? []).map { AppsRow(id: $0.id, title: $0.id, subtitle: $0.id, size: sizes[$0.id]) }
+            (orphans ?? []).map {
+                Entry(
+                    row: AppsRow(id: $0.id, title: $0.id, subtitle: $0.id, size: sizes[SizeKey(section: .orphans, id: $0.id)]),
+                    searchKeys: [$0.id])
+            }
         }
     }
 
@@ -206,16 +291,6 @@ final class AppsModel: ObservableObject {
     private func apply(_ loaded: [LeftoverItem]) {
         items = loaded
         checked = section == .installed ? [] : Set(loaded.filter(\.isSelectedByDefault).map(\.id))
-    }
-
-    private func reload(after before: [AppsRow], selected id: String?) async {
-        guard let id else { return }
-        if rows.contains(where: { $0.id == id }) {
-            await select(id)
-        } else {
-            moveSelection(after: before, from: id)
-            await pendingLoad?.value
-        }
     }
 
     private func moveSelection(after before: [AppsRow], from id: String) {

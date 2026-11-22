@@ -57,6 +57,10 @@ struct Notice: Equatable {
     var ids: Set<String> = []
 }
 
+@MainActor final class AccessState {
+    var granted = true
+}
+
 @MainActor final class SearchHook {
     var beforeSearch: (() -> Void)?
 }
@@ -68,6 +72,7 @@ struct Notice: Equatable {
     let notices = Notices()
     let searchHook = SearchHook()
     let running = RunningApps()
+    let access = AccessState()
 
     var apps: URL { root.appending(path: "Applications", directoryHint: .isDirectory) }
     var user: URL { root.appending(path: "User", directoryHint: .isDirectory) }
@@ -83,7 +88,7 @@ struct Notice: Equatable {
     func cleanUp() { try? FileManager.default.removeItem(at: root) }
 
     func makeController() -> AppsController {
-        let user = user, system = system, notices = notices, searchHook = searchHook, running = running
+        let user = user, system = system, notices = notices, searchHook = searchHook, running = running, access = access
         return AppsController(environment: AppsEnvironment(
             store: store,
             scanner: AppScanner(roots: [apps], teamID: { _ in nil }),
@@ -101,7 +106,7 @@ struct Notice: Equatable {
                 exists: { FileManager.default.fileExists(atPath: $0.path) },
                 userTrash: root.appending(path: "Trash", directoryHint: .isDirectory),
                 now: { Date(timeIntervalSince1970: 0) }),
-            hasFullDiskAccess: { true },
+            hasFullDiskAccess: { access.granted },
             isRunning: { running.ids.contains($0) },
             now: { Date(timeIntervalSince1970: 1_000) }
         ))
