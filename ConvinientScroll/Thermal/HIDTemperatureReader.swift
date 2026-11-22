@@ -21,6 +21,7 @@ nonisolated final class HIDTemperatureReader: CPUTemperatureSource {
     private let services: [AnyObject]
     private let copyEvent: CopyEventFn
     private let getFloat: GetFloatFn
+    private var hottest: HottestSensors
 
     init?() {
         guard let handle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW),
@@ -47,14 +48,16 @@ nonisolated final class HIDTemperatureReader: CPUTemperatureSource {
         self.sensorNames = dies.map(\.0)
         self.copyEvent = copyEvent
         self.getFloat = getFloat
+        self.hottest = HottestSensors(count: dies.count)
     }
 
     func read() -> Double? {
-        let readings = zip(sensorNames, services).compactMap { name, service -> SensorReading? in
-            guard let event = copyEvent(service, Self.temperatureEvent, 0, 0)?.takeRetainedValue() else { return nil }
-            return SensorReading(name: name, celsius: getFloat(event, Self.temperatureField))
+        let readings = hottest.nextIndices().compactMap { index -> (index: Int, celsius: Double)? in
+            guard let event = copyEvent(services[index], Self.temperatureEvent, 0, 0)?.takeRetainedValue() else { return nil }
+            return (index, getFloat(event, Self.temperatureField))
         }
-        return CPUSensors.hottest(readings)
+        if hottest.isFullScan { hottest.recordFullScan(readings) }
+        return CPUSensors.hottest(readings.map { SensorReading(name: sensorNames[$0.index], celsius: $0.celsius) })
     }
 
     private static func symbol<T>(_ handle: UnsafeMutableRawPointer, _ name: String, _ type: T.Type) -> T? {

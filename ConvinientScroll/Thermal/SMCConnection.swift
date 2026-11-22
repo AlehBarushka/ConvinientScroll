@@ -52,6 +52,7 @@ nonisolated final class SMCConnection {
     }
 
     private let connection: io_connect_t
+    private var keyInfo: [UInt32: SMCKeyInfoData] = [:]
 
     init?() {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSMC"))
@@ -69,8 +70,7 @@ nonisolated final class SMCConnection {
     func read(_ key: String) -> (type: String, bytes: [UInt8])? {
         var request = SMCKeyData()
         request.key = SMCDecode.fourCC(key)
-        request.data8 = Command.keyInfo.rawValue
-        guard let info = call(request)?.keyInfo else { return nil }
+        guard let info = info(for: request.key) else { return nil }
         request.keyInfo.dataSize = info.dataSize
         request.data8 = Command.read.rawValue
         guard let reply = call(request) else { return nil }
@@ -87,6 +87,16 @@ nonisolated final class SMCConnection {
             request.data32 = index
             return call(request).map { SMCDecode.string(fourCC: $0.key) }
         }
+    }
+
+    private func info(for key: UInt32) -> SMCKeyInfoData? {
+        if let cached = keyInfo[key] { return cached }
+        var request = SMCKeyData()
+        request.key = key
+        request.data8 = Command.keyInfo.rawValue
+        guard let info = call(request)?.keyInfo else { return nil }
+        keyInfo[key] = info
+        return info
     }
 
     private func call(_ request: SMCKeyData) -> SMCKeyData? {

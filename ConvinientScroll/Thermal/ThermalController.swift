@@ -11,8 +11,15 @@ final class ThermalController: NSObject, NSMenuDelegate {
 
     private let sampling = SamplingQueue()
     private let pressure = ThermalPressureSource()
-    private lazy var monitor = ThermalMonitor(read: sampling.read, schedule: RepeatingTimer.dispatch)
+    private lazy var monitor = ThermalMonitor(
+        read: { [weak self] completion in
+            guard let self else { return }
+            self.sampling.read(includeFan: self.isMenuOpen, completion)
+        },
+        schedule: RepeatingTimer.dispatch
+    )
     private var isEnabled = false
+    private var isMenuOpen = false
     private var statusItem: NSStatusItem?
     private var detailItem: NSMenuItem?
     private var statisticsItem: NSMenuItem?
@@ -132,11 +139,14 @@ final class ThermalController: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
         refreshMenu()
         monitor.onUpdate = { [weak self] in self?.refreshMenu() }
+        monitor.refreshNow()
     }
 
     func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
         monitor.onUpdate = nil
     }
 
@@ -162,9 +172,9 @@ private nonisolated final class SamplingQueue: @unchecked Sendable {
         queue.async { self.sampler = nil }
     }
 
-    func read(_ completion: @escaping @MainActor (ThermalSample) -> Void) {
+    func read(includeFan: Bool, _ completion: @escaping @MainActor (ThermalSample) -> Void) {
         queue.async {
-            let sample = self.sampler?.sample() ?? ThermalSample(celsius: nil, fanPercent: nil)
+            let sample = self.sampler?.sample(includeFan: includeFan) ?? ThermalSample(celsius: nil, fanPercent: nil)
             DispatchQueue.main.async { MainActor.assumeIsolated { completion(sample) } }
         }
     }

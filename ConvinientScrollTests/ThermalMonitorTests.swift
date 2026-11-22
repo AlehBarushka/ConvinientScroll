@@ -74,16 +74,45 @@ struct ThermalMonitorTests {
         #expect(h.ticker.schedules.first?.tolerance == 0.4)
     }
 
-    @Test func sameWholeDegreeDoesNotRedraw() {
+    @Test func jitterDoesNotRedraw() {
         let h = Harness()
         h.monitor.setEnabled(true)
         h.answer(34.9)
         h.tick(answer: 35.2)
-        h.tick(answer: 36.6)
+        h.tick(answer: 36.4)
 
-        #expect(h.shown.map(\.celsius) == [35, 37])
+        #expect(h.shown.map(\.celsius) == [35])
         #expect(h.updates == 3)
-        #expect(h.monitor.lastSample?.celsius == 36.6)
+        #expect(h.monitor.lastSample?.celsius == 36.4)
+    }
+
+    @Test func sustainedChangeRedraws() {
+        let h = Harness()
+        h.monitor.setEnabled(true)
+        h.answer(35)
+        h.tick(answer: 38)
+        h.tick(answer: 38)
+
+        #expect(h.shown.map(\.celsius) == [35, 38])
+    }
+
+    @Test func refreshNowReadsOnceWhenIdle() {
+        let h = Harness()
+        h.monitor.refreshNow()
+        #expect(h.reads == 0)
+
+        h.monitor.setEnabled(true)
+        h.monitor.refreshNow()
+        #expect(h.reads == 1)
+
+        h.answer(35)
+        h.monitor.refreshNow()
+        #expect(h.reads == 2)
+
+        h.answer(35)
+        h.monitor.setPaused(true, for: .displaySleep)
+        h.monitor.refreshNow()
+        #expect(h.reads == 2)
     }
 
     @Test func levelColourRedrawsWithoutReading() {

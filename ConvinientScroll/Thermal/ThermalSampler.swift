@@ -23,12 +23,12 @@ nonisolated final class ThermalSampler {
         self.fan = fan
     }
 
-    func sample() -> ThermalSample {
+    func sample(includeFan: Bool) -> ThermalSample {
         if !isResolved {
             isResolved = true
             source = resolveSource()
         }
-        return ThermalSample(celsius: source?.read(), fanPercent: fan())
+        return ThermalSample(celsius: source?.read(), fanPercent: includeFan ? fan() : nil)
     }
 
     private func resolveSource() -> CPUTemperatureSource? {
@@ -47,27 +47,24 @@ nonisolated final class ThermalSampler {
     static func live() -> ThermalSampler {
         let smc = SMCConnection()
         if smc == nil { AppLog.thermal.error("AppleSMC is unavailable") }
-        var fanCount: UInt32?
+        var fanMaxima: [Double]?
         return ThermalSampler(
             primary: { HIDTemperatureReader() },
             fallback: { smc.flatMap(SMCTemperatureSource.init) },
             fan: {
                 guard let smc else { return nil }
-                if fanCount == nil {
-                    fanCount = smc.read("FNum").flatMap { SMCDecode.unsigned($0.bytes) } ?? 0
+                let maxima = fanMaxima ?? fanMaximaReading(smc)
+                fanMaxima = maxima
+                let fans = maxima.enumerated().compactMap { n, max -> (actual: Double, max: Double)? in
+                    smc.read("F\(n)Ac").flatMap { SMCDecode.float($0.bytes) }.map { (actual: $0, max: max) }
                 }
-                return fanPercent(smc, count: fanCount ?? 0)
+                return FanSpeed.percent(fans)
             }
         )
     }
 
-    private static func fanPercent(_ smc: SMCConnection, count: UInt32) -> Int? {
-        guard count > 0 else { return nil }
-        let fans = (0..<count).compactMap { n -> (actual: Double, max: Double)? in
-            guard let actual = smc.read("F\(n)Ac").flatMap({ SMCDecode.float($0.bytes) }),
-                  let max = smc.read("F\(n)Mx").flatMap({ SMCDecode.float($0.bytes) }) else { return nil }
-            return (actual, max)
-        }
-        return FanSpeed.percent(fans)
+    private static func fanMaximaReading(_ smc: SMCConnection) -> [Double] {
+        let count = smc.read("FNum").flatMap { SMCDecode.unsigned($0.bytes) } ?? 0
+        return (0..<count).map { n in smc.read("F\(n)Mx").flatMap { SMCDecode.float($0.bytes) } ?? 0 }
     }
 }

@@ -30,6 +30,7 @@ final class ThermalMonitor {
     private var isReading = false
     private var needsDisplay = true
     private var alertPolicy = ThrottleAlertPolicy()
+    private var shownTemperature = DisplayedTemperature()
 
     init(read: @escaping Read, schedule: @escaping RepeatingTimer.Schedule, now: @escaping () -> Date = Date.init) {
         self.read = read
@@ -83,6 +84,11 @@ final class ThermalMonitor {
         onUpdate?()
     }
 
+    func refreshNow() {
+        guard isEnabled, pauseReasons.isEmpty else { return }
+        refresh()
+    }
+
     private func resumeIfPossible() {
         guard isEnabled, pauseReasons.isEmpty, ticker == nil else { return }
         refresh()
@@ -93,6 +99,7 @@ final class ThermalMonitor {
         ticker = nil
         generation += 1
         isReading = false
+        shownTemperature.reset()
     }
 
     private func refresh() {
@@ -107,7 +114,7 @@ final class ThermalMonitor {
         isReading = false
         lastSample = sample
         var next = display
-        next.celsius = sample.celsius.map { Int($0.rounded()) }
+        next.celsius = shownTemperature.update(sample.celsius)
         publish(next)
         onUpdate?()
     }
