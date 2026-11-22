@@ -1,7 +1,6 @@
 import AppKit
 import Combine
 import OSLog
-import SwiftUI
 
 @MainActor
 final class ThermalController: NSObject, NSMenuDelegate {
@@ -12,11 +11,11 @@ final class ThermalController: NSObject, NSMenuDelegate {
 
     private let sampling = SamplingQueue()
     private let pressure = ThermalPressureSource()
-    private let menuModel = ThermalMenuModel()
     private lazy var monitor = ThermalMonitor(read: sampling.read, schedule: RepeatingTimer.dispatch)
     private var isEnabled = false
     private var statusItem: NSStatusItem?
     private var detailItem: NSMenuItem?
+    private var statisticsItem: NSMenuItem?
     private var pauseObserver: WorkspacePauseObserver?
 
     private let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular)
@@ -65,8 +64,7 @@ final class ThermalController: NSObject, NSMenuDelegate {
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         statusItem = nil
         detailItem = nil
-        menuModel.points = []
-        menuModel.durations = []
+        statisticsItem = nil
         AppLog.thermal.info("Thermal module stopped")
     }
 
@@ -91,12 +89,9 @@ final class ThermalController: NSObject, NSMenuDelegate {
         let detail = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         detail.isEnabled = false
         menu.addItem(detail)
-        menu.addItem(.separator())
-        let chart = NSMenuItem()
-        let hosting = NSHostingView(rootView: ThermalMenuView(model: menuModel))
-        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
-        chart.view = hosting
-        menu.addItem(chart)
+        let statistics = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        statistics.isEnabled = false
+        menu.addItem(statistics)
         menu.addItem(.separator())
         let open = NSMenuItem(title: "Open Activity Monitor", action: #selector(openActivityMonitor), keyEquivalent: "")
         open.target = self
@@ -105,6 +100,7 @@ final class ThermalController: NSObject, NSMenuDelegate {
 
         statusItem = item
         detailItem = detail
+        statisticsItem = statistics
         show(monitor.display)
     }
 
@@ -132,8 +128,7 @@ final class ThermalController: NSObject, NSMenuDelegate {
             fanPercent: monitor.lastSample?.fanPercent,
             level: monitor.display.level
         )
-        menuModel.points = monitor.history.points
-        menuModel.durations = monitor.statistics.durations(at: Date())
+        statisticsItem?.title = ThermalText.statistics(monitor.statistics.durations(at: Date()))
     }
 
     func menuWillOpen(_ menu: NSMenu) {

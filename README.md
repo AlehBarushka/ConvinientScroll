@@ -50,7 +50,7 @@ Off by default; turn it on in **Settings → Temperature**.
 
 - A separate menu bar item shows the hottest CPU sensor, for example **58°**, in °C. The item keeps the same width as the digits change.
 - The number turns **yellow** when macOS reports Heavy thermal pressure (the Mac is throttled) and **red** at Critical.
-- Click it to see the temperature, the fan speed and the pressure level, a chart of the last 10 minutes (temperature as a line, fan as a dashed line, throttling as a tinted background) and how long the Mac has spent at each level since the module was turned on.
+- Click it to see the temperature, the fan speed and the pressure level, and how long the Mac has spent at each level since the module was turned on.
 - A notification arrives when the Mac starts throttling: Heavy at most once every 10 minutes, Critical every time. It can be turned off in the same settings section.
 - Works on Apple silicon (M1 and later). On Intel Macs the item shows **—°** and the pressure level only.
 
@@ -87,7 +87,7 @@ Off by default; turn it on in **Settings → Temperature**.
 - The thermal pressure level comes from the `com.apple.system.thermalpressurelevel` Darwin notification, so colours and notifications need no polling.
 - The temperature is read every 2 seconds with a 20% leeway from the HID temperature sensors of the CPU dies (`tdie`, `pACC`/`eACC MTR`, `SOC MTR`), picked by name rather than by a per-model table. If a Mac has none, the module falls back to SMC `Tp*`/`Te*` keys; readings outside 10–130 °C are ignored. The fan speed comes from SMC (`F0Ac` against `F0Mx`).
 - Sensors are read on a background queue. The HID client and the SMC connection are opened once when the module is turned on and closed when it is turned off.
-- The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active. The history lives in memory only.
+- The timer runs only while the module is on, and stops while the Mac sleeps, the display is off or another user is active. The level statistics live in memory only.
 
 Apart from the Memory and Temperature modules, the app runs no periodic timers when idle: everything is driven by system notifications.
 

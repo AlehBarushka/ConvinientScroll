@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 @testable import MacToolkit
 
@@ -36,15 +35,6 @@ struct ThermalLevelTests {
         ]
         #expect(ThermalText.statistics(durations) == "Since enabled: Nominal 1h 52m · Moderate 12m · Heavy 4m")
         #expect(ThermalText.statistics([]) == "Since enabled: —")
-    }
-
-    @Test func chartTopFitsTheHottestPoint() {
-        func point(_ celsius: Double?) -> ThermalPoint {
-            ThermalPoint(id: 0, date: .distantPast, celsius: celsius, fanPercent: nil, level: nil, segment: 0)
-        }
-        #expect(ThermalChartScale.top(for: []) == 110)
-        #expect(ThermalChartScale.top(for: [point(58), point(nil)]) == 110)
-        #expect(ThermalChartScale.top(for: [point(112.3)]) == 120)
     }
 
     @Test func durationText() {

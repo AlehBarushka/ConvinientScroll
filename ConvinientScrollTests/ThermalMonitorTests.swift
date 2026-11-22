@@ -83,7 +83,7 @@ struct ThermalMonitorTests {
 
         #expect(h.shown.map(\.celsius) == [35, 37])
         #expect(h.updates == 3)
-        #expect(h.monitor.history.points.map(\.celsius) == [34.9, 35.2, 36.6])
+        #expect(h.monitor.lastSample?.celsius == 36.6)
     }
 
     @Test func levelColourRedrawsWithoutReading() {
@@ -111,7 +111,6 @@ struct ThermalMonitorTests {
         h.monitor.setEnabled(false)
         h.answer(50)
 
-        #expect(h.monitor.history.points.isEmpty)
         #expect(h.monitor.display.celsius == nil)
         #expect(h.monitor.lastSample == nil)
     }
@@ -125,11 +124,11 @@ struct ThermalMonitorTests {
         h.monitor.setPaused(true, for: .displaySleep)
         h.answer(60)
 
-        #expect(h.monitor.history.points.count == 1)
+        #expect(h.monitor.lastSample?.celsius == 40)
         #expect(h.monitor.display.celsius == 40)
     }
 
-    @Test func pauseStopsTicksAndBreaksTheLine() {
+    @Test func pauseStopsTicksAndResumeReadsAtOnce() {
         let h = Harness()
         h.monitor.setEnabled(true)
         h.answer(40)
@@ -143,7 +142,7 @@ struct ThermalMonitorTests {
         #expect(h.ticker.isActive)
         h.answer(45)
 
-        #expect(h.monitor.history.points.map(\.segment) == [0, 1])
+        #expect(h.monitor.display.celsius == 45)
     }
 
     @Test func resumeWaitsForEveryReason() {
@@ -209,7 +208,7 @@ struct ThermalMonitorTests {
         #expect(h.monitor.statistics.durations(at: h.clock) == [LevelDuration(level: .nominal, seconds: 40)])
     }
 
-    @Test func disablingClearsHistoryAndStatistics() {
+    @Test func disablingClearsStatistics() {
         let h = Harness()
         h.monitor.levelChanged(.nominal)
         h.monitor.setEnabled(true)
@@ -217,7 +216,7 @@ struct ThermalMonitorTests {
         h.clock += 30
         h.monitor.setEnabled(false)
 
-        #expect(h.monitor.history.points.isEmpty)
+        #expect(h.monitor.lastSample == nil)
         #expect(h.monitor.statistics.durations(at: h.clock).isEmpty)
     }
 

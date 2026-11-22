@@ -18,7 +18,6 @@ final class ThermalMonitor {
     var alertsEnabled = true
     private(set) var display = Display(celsius: nil, level: nil)
     private(set) var lastSample: ThermalSample?
-    private(set) var history = ThermalHistory()
     private(set) var statistics = ThermalStatistics()
 
     private let read: Read
@@ -47,7 +46,6 @@ final class ThermalMonitor {
             resumeIfPossible()
         } else {
             stopReading()
-            history.removeAll()
             statistics.reset()
             lastSample = nil
             display.celsius = nil
@@ -60,9 +58,7 @@ final class ThermalMonitor {
             let wasRunning = pauseReasons.isEmpty
             guard pauseReasons.insert(reason).inserted, isEnabled else { return }
             if reason == .systemSleep { statistics.pause(at: now()) }
-            guard wasRunning else { return }
-            stopReading()
-            history.breakLine()
+            if wasRunning { stopReading() }
         } else {
             guard pauseReasons.remove(reason) != nil, isEnabled else { return }
             if reason == .systemSleep { statistics.resume(at: now()) }
@@ -109,7 +105,6 @@ final class ThermalMonitor {
     private func accept(_ sample: ThermalSample, generation: Int) {
         guard generation == self.generation else { return }
         isReading = false
-        history.append(sample, level: display.level, at: now())
         lastSample = sample
         var next = display
         next.celsius = sample.celsius.map { Int($0.rounded()) }

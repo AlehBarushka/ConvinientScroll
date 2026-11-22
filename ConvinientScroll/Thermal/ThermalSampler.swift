@@ -1,6 +1,11 @@
 import Foundation
 import OSLog
 
+nonisolated struct ThermalSample: Equatable, Sendable {
+    var celsius: Double?
+    var fanPercent: Int?
+}
+
 nonisolated final class ThermalSampler {
     private let primary: () -> CPUTemperatureSource?
     private let fallback: () -> CPUTemperatureSource?
