@@ -38,6 +38,35 @@ struct HottestSensorsTests {
         #expect(sensors.isFullScan)
     }
 
+    @Test func readReturnsTheHottestAndThenReadsOnlyTheHotOnes() {
+        var sensors = HottestSensors(count: 6)
+        var values: [Double] = [30, 41, 35, 39, 33, 45]
+        var asked: [Int] = []
+        let read = { (index: Int) -> Double? in asked.append(index); return values[index] }
+
+        #expect(sensors.read(using: read) == 45)
+        #expect(asked == [0, 1, 2, 3, 4, 5])
+
+        asked = []
+        values[5] = 44
+        #expect(sensors.read(using: read) == 44)
+        #expect(asked == [1, 2, 3, 5])
+    }
+
+    @Test func garbageFromTheHotOnesRescansEverySensorAtOnce() {
+        var sensors = HottestSensors(count: 6)
+        var values: [Double?] = [30, 41, 35, 39, 33, 45]
+        _ = sensors.read { values[$0] }
+
+        for index in [1, 2, 3, 5] { values[index] = -9201 }
+        #expect(sensors.read { values[$0] } == 33)
+    }
+
+    @Test func noReadableSensorGivesNothing() {
+        var sensors = HottestSensors(count: 3)
+        #expect(sensors.read { _ in nil } == nil)
+    }
+
     @Test func fewerSensorsThanTheSubsetReadsThemAll() {
         var sensors = HottestSensors(count: 2)
         _ = sensors.nextIndices()

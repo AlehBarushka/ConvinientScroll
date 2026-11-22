@@ -32,16 +32,13 @@ nonisolated final class ThermalSampler {
     }
 
     private func resolveSource() -> CPUTemperatureSource? {
-        if let source = primary() {
-            AppLog.thermal.notice("CPU temperature from HID: \(source.sensorNames.joined(separator: ", "), privacy: .public)")
-            return source
+        guard let source = primary() ?? fallback() else {
+            AppLog.thermal.error("No CPU temperature sensors found")
+            return nil
         }
-        if let source = fallback() {
-            AppLog.thermal.notice("CPU temperature from SMC: \(source.sensorNames.joined(separator: ", "), privacy: .public)")
-            return source
-        }
-        AppLog.thermal.error("No CPU temperature sensors found")
-        return nil
+        let names = source.sensorNames.joined(separator: ", ")
+        AppLog.thermal.notice("CPU temperature from \(String(describing: type(of: source)), privacy: .public): \(names, privacy: .public)")
+        return source
     }
 
     static func live() -> ThermalSampler {
@@ -49,8 +46,8 @@ nonisolated final class ThermalSampler {
         if smc == nil { AppLog.thermal.error("AppleSMC is unavailable") }
         var fanMaxima: [Double]?
         return ThermalSampler(
-            primary: { HIDTemperatureReader() },
-            fallback: { smc.flatMap(SMCTemperatureSource.init) },
+            primary: { smc.flatMap(SMCTemperatureSource.init) },
+            fallback: { HIDTemperatureReader() },
             fan: {
                 guard let smc else { return nil }
                 let maxima = fanMaxima ?? fanMaximaReading(smc)

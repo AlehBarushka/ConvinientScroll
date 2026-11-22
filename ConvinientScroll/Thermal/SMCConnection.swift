@@ -112,6 +112,7 @@ nonisolated final class SMCConnection {
 nonisolated final class SMCTemperatureSource: CPUTemperatureSource {
     let sensorNames: [String]
     private let smc: SMCConnection
+    private var hottest: HottestSensors
 
     init?(smc: SMCConnection) {
         let keys = smc.keys().filter { key in
@@ -124,11 +125,10 @@ nonisolated final class SMCTemperatureSource: CPUTemperatureSource {
         guard !keys.isEmpty else { return nil }
         self.smc = smc
         self.sensorNames = keys
+        self.hottest = HottestSensors(count: keys.count)
     }
 
     func read() -> Double? {
-        CPUSensors.hottest(sensorNames.compactMap { key in
-            smc.read(key).flatMap { SMCDecode.float($0.bytes) }.map { SensorReading(name: key, celsius: $0) }
-        })
+        hottest.read { index in smc.read(sensorNames[index]).flatMap { SMCDecode.float($0.bytes) } }
     }
 }

@@ -11,6 +11,13 @@ nonisolated struct HottestSensors {
         self.count = count
     }
 
+    mutating func read(using value: (Int) -> Double?) -> Double? {
+        if let celsius = readSelected(using: value) { return celsius }
+        guard !isFullScan else { return nil }
+        invalidate()
+        return readSelected(using: value)
+    }
+
     mutating func nextIndices() -> [Int] {
         isFullScan = hot.isEmpty || samplesSinceScan >= Self.rescanEvery - 1
         if isFullScan {
@@ -23,6 +30,12 @@ nonisolated struct HottestSensors {
 
     mutating func invalidate() {
         hot = []
+    }
+
+    private mutating func readSelected(using value: (Int) -> Double?) -> Double? {
+        let readings = nextIndices().compactMap { index in value(index).map { (index: index, celsius: $0) } }
+        if isFullScan { recordFullScan(readings) }
+        return CPUSensors.hottest(readings.map { SensorReading(name: "", celsius: $0.celsius) })
     }
 
     mutating func recordFullScan(_ readings: [(index: Int, celsius: Double)]) {
