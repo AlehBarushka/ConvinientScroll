@@ -11,6 +11,9 @@ final class AppSettings: ObservableObject {
         static let memoryEnabled = "modules.memory.enabled"
         static let thermalEnabled = "modules.thermal.enabled"
         static let thermalAlertsEnabled = "thermal.alerts.enabled"
+        static let appsEnabled = "modules.apps.enabled"
+        static let appsWatchEnabled = "apps.watch.enabled"
+        static let appsHiddenIDs = "apps.hidden"
     }
 
     /// How long a file stays on the shelf, counted from the moment it was added.
@@ -71,6 +74,18 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(thermalAlertsEnabled, forKey: Key.thermalAlertsEnabled) }
     }
 
+    @Published var appsEnabled: Bool {
+        didSet { defaults.set(appsEnabled, forKey: Key.appsEnabled) }
+    }
+
+    @Published var appsWatchEnabled: Bool {
+        didSet { defaults.set(appsWatchEnabled, forKey: Key.appsWatchEnabled) }
+    }
+
+    @Published var appsHiddenIDs: [String] {
+        didSet { defaults.set(appsHiddenIDs, forKey: Key.appsHiddenIDs) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -81,7 +96,10 @@ final class AppSettings: ObservableObject {
             Key.shelfRetention: ShelfRetention.oneDay.rawValue,
             Key.memoryEnabled: false,
             Key.thermalEnabled: false,
-            Key.thermalAlertsEnabled: true
+            Key.thermalAlertsEnabled: true,
+            Key.appsEnabled: true,
+            Key.appsWatchEnabled: true,
+            Key.appsHiddenIDs: [String]()
         ])
         autoScrollEnabled = defaults.bool(forKey: Key.autoScrollEnabled)
         shelfEnabled = defaults.bool(forKey: Key.shelfEnabled)
@@ -90,5 +108,8 @@ final class AppSettings: ObservableObject {
         memoryEnabled = defaults.bool(forKey: Key.memoryEnabled)
         thermalEnabled = defaults.bool(forKey: Key.thermalEnabled)
         thermalAlertsEnabled = defaults.bool(forKey: Key.thermalAlertsEnabled)
+        appsEnabled = defaults.bool(forKey: Key.appsEnabled)
+        appsWatchEnabled = defaults.bool(forKey: Key.appsWatchEnabled)
+        appsHiddenIDs = defaults.stringArray(forKey: Key.appsHiddenIDs) ?? []
     }
 }
