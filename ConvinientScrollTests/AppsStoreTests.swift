@@ -4,7 +4,6 @@ import Testing
 
 @Suite("AppsStore")
 struct AppsStoreTests {
-    /// A unique temporary root, removed when the test's sandbox goes out of scope.
     final class Sandbox {
         let root: URL
 

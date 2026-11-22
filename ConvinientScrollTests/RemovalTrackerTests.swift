@@ -114,7 +114,7 @@ private func app(_ path: String, id: String = "com.example.chatter", version: St
     }
 
     @Test func cancelAllDropsPendingChecks() {
-        let (tracker, scheduler, reported) = make(known: [chatter])
+        let (tracker, scheduler, _) = make(known: [chatter])
         tracker.update(current: [])
         tracker.cancelAll()
         #expect(scheduler.checks[0].cancelled)

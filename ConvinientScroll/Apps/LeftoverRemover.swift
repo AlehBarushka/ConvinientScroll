@@ -69,7 +69,6 @@ nonisolated enum LeftoverRemover {
         var removed: [URL] = []
         var failed: [URL] = []
         var bytes: Int64 = 0
-        var adminCancelled = false
 
         let userItems = items.filter { $0.entry.domain == .user }
         let systemItems = items.filter { $0.entry.domain == .system }
