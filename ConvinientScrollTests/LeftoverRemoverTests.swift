@@ -42,14 +42,15 @@ import Testing
             },
             exists: exists,
             userTrash: userTrash,
+            owner: "501:20",
             now: { date(hour: 14, minute: 5, second: 9) }
         )
     }
 
     @Test func quotesAwkwardPaths() {
         let script = LeftoverRemover.privilegedScript(items: [URL(filePath: "/Library/Application Support/Bob's \"Tool\"")],
-            services: [], destinations: [URL(filePath: "/T/Bob's \"Tool\"")])
-        #expect(script == "/bin/mv -n '/Library/Application Support/Bob'\\''s \"Tool\"' '/T/Bob'\\''s \"Tool\"'")
+            services: [], destinations: [URL(filePath: "/T/Bob's \"Tool\"")], owner: "501:20")
+        #expect(script == "/bin/mv -n '/Library/Application Support/Bob'\\''s \"Tool\"' '/T/Bob'\\''s \"Tool\"' && /usr/sbin/chown -R '501:20' '/T/Bob'\\''s \"Tool\"'")
         #expect(LeftoverRemover.appleScriptCommand("echo \"a\\b\"") == "do shell script \"echo \\\"a\\\\b\\\"\" with administrator privileges")
     }
 
@@ -57,12 +58,12 @@ import Testing
         let plist = URL(filePath: "/Library/LaunchDaemons/x.plist")
         let helper = URL(filePath: "/Library/PrivilegedHelperTools/x")
         let script = LeftoverRemover.privilegedScript(items: [plist, helper], services: [plist],
-                                                      destinations: [URL(filePath: "/T/x.plist"), URL(filePath: "/T/x")])
+                                                      destinations: [URL(filePath: "/T/x.plist"), URL(filePath: "/T/x")], owner: "501:20")
         let lines = script.split(separator: "\n").map(String.init)
         #expect(lines == [
             "/bin/launchctl bootout system '/Library/LaunchDaemons/x.plist' 2>/dev/null",
-            "/bin/mv -n '/Library/LaunchDaemons/x.plist' '/T/x.plist'",
-            "/bin/mv -n '/Library/PrivilegedHelperTools/x' '/T/x'"
+            "/bin/mv -n '/Library/LaunchDaemons/x.plist' '/T/x.plist' && /usr/sbin/chown -R '501:20' '/T/x.plist'",
+            "/bin/mv -n '/Library/PrivilegedHelperTools/x' '/T/x' && /usr/sbin/chown -R '501:20' '/T/x'"
         ])
     }
 
@@ -126,6 +127,17 @@ import Testing
         #expect(recorder.calls == ["privileged"])
     }
 
+    @Test func systemItemsInTheTrashBelongToTheUser() {
+        let recorder = Recorder()
+        let daemon = Self.item("/Library/LaunchDaemons/com.example.tool.plist", domain: .system, folder: .launchDaemons)
+        let env = Self.environment(recorder: recorder, privileged: { recorder.add("script \($0)") })
+        _ = LeftoverRemover.remove([daemon], environment: env)
+        #expect(recorder.calls.contains(
+            "script /bin/launchctl bootout system '/Library/LaunchDaemons/com.example.tool.plist' 2>/dev/null\n"
+            + "/bin/mv -n '/Library/LaunchDaemons/com.example.tool.plist' '/T/com.example.tool.plist'"
+            + " && /usr/sbin/chown -R '501:20' '/T/com.example.tool.plist'"))
+    }
+
     @Test func failedPrivilegedRunIsJudgedByWhatIsLeft() {
         let recorder = Recorder()
         let moved = Self.item("/Library/Caches/a", domain: .system, folder: .caches, size: 3)
@@ -149,9 +161,9 @@ import Testing
         _ = LeftoverRemover.remove([first, second, third], environment: env)
         let lines = (scripts.calls.first ?? "").split(separator: "\n").map(String.init)
         #expect(lines == [
-            "/bin/mv -n '/Library/Caches/x.log' '/T/x.log'",
-            "/bin/mv -n '/Library/Logs/x.log' '/T/x 14.05.09.log'",
-            "/bin/mv -n '/Library/Application Support/x.log' '/T/x 14.05.09 2.log'"
+            "/bin/mv -n '/Library/Caches/x.log' '/T/x.log' && /usr/sbin/chown -R '501:20' '/T/x.log'",
+            "/bin/mv -n '/Library/Logs/x.log' '/T/x 14.05.09.log' && /usr/sbin/chown -R '501:20' '/T/x 14.05.09.log'",
+            "/bin/mv -n '/Library/Application Support/x.log' '/T/x 14.05.09 2.log' && /usr/sbin/chown -R '501:20' '/T/x 14.05.09 2.log'"
         ])
     }
 }

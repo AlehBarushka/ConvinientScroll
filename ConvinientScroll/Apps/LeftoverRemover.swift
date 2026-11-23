@@ -12,6 +12,7 @@ nonisolated struct RemovalEnvironment: Sendable {
     var runPrivileged: @Sendable (String) throws(PrivilegedError) -> Void
     var exists: @Sendable (URL) -> Bool
     var userTrash: URL
+    var owner: String
     var now: @Sendable () -> Date
 
     static func live() -> RemovalEnvironment {
@@ -39,6 +40,7 @@ nonisolated struct RemovalEnvironment: Sendable {
             },
             exists: { FileManager.default.fileExists(atPath: $0.path) },
             userTrash: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".Trash"),
+            owner: "\(getuid()):\(getgid())",
             now: { Date() }
         )
     }
@@ -115,7 +117,8 @@ nonisolated enum LeftoverRemover {
         let script = privilegedScript(
             items: systemItems.map(\.id),
             services: systemItems.filter { $0.kind == .service }.map(\.id),
-            destinations: destinations)
+            destinations: destinations,
+            owner: environment.owner)
         do {
             try environment.runPrivileged(script)
         } catch {
@@ -139,10 +142,11 @@ nonisolated enum LeftoverRemover {
         return RemovalReport(removed: removed, failed: failed, adminCancelled: false, bytes: bytes)
     }
 
-    static func privilegedScript(items: [URL], services: [URL], destinations: [URL]) -> String {
+    static func privilegedScript(items: [URL], services: [URL], destinations: [URL], owner: String) -> String {
         var lines = services.map { "/bin/launchctl bootout system \(shellQuoted($0.path)) 2>/dev/null" }
         for (source, destination) in zip(items, destinations) {
-            lines.append("/bin/mv -n \(shellQuoted(source.path)) \(shellQuoted(destination.path))")
+            let target = shellQuoted(destination.path)
+            lines.append("/bin/mv -n \(shellQuoted(source.path)) \(target) && /usr/sbin/chown -R \(shellQuoted(owner)) \(target)")
         }
         return lines.joined(separator: "\n")
     }

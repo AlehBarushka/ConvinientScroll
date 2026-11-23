@@ -113,6 +113,7 @@ struct Notice: Equatable {
                 runPrivileged: { _ throws(PrivilegedError) in },
                 exists: { FileManager.default.fileExists(atPath: $0.path) },
                 userTrash: trash,
+                owner: "501:20",
                 now: { Date(timeIntervalSince1970: 0) }),
             hasFullDiskAccess: { access.granted },
             isRunning: { running.ids.contains($0) },
