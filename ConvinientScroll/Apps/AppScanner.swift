@@ -43,10 +43,13 @@ nonisolated struct AppScanner: Sendable {
     func scan(reusing previous: [InstalledApp]) -> [InstalledApp] {
         let known = Dictionary(previous.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         return appURLs().compactMap { url in
-            if let old = known[url.path], old.infoPlistModified == Self.plistModified(of: url) {
-                return old
+            // Without a pool per app the first full scan keeps ~10 MB of freed but dirty malloc pages for the life of the process.
+            autoreleasepool {
+                if let old = known[url.path], old.infoPlistModified == Self.plistModified(of: url) {
+                    return old
+                }
+                return Self.read(appAt: url, teamID: teamID)
             }
-            return Self.read(appAt: url, teamID: teamID)
         }
     }
 
